@@ -1,0 +1,3389 @@
+import React, {
+  useCallback,
+  useMemo,
+  useState,
+} from "react";
+
+import {
+  SafeAreaView,
+  View,
+  Text,
+  TouchableOpacity,
+  ScrollView,
+  StyleSheet,
+  Alert,
+  TextInput,
+  ActivityIndicator,
+  KeyboardAvoidingView,
+  Platform,
+  Modal,
+  FlatList,
+} from "react-native";
+
+import * as Location from "expo-location";
+
+import {
+  wasteTypes,
+  address,
+  collections,
+} from "./data";
+
+import { getContracts } from "./api";
+
+/* =========================================================
+   LITHUANIA NATIONAL ADDRESS API
+   ========================================================= */
+
+const ADDRESS_API =
+  "https://boundaries.biip.lt/v1";
+
+/*
+  The API uses cursor pagination.
+  We keep requesting pages until next_page is empty.
+*/
+
+async function fetchAllPages(
+  endpoint,
+  filters = [],
+  options = {}
+) {
+  const allItems = [];
+  let cursor = null;
+
+  const size =
+    options.size || 100;
+
+  let safety = 0;
+
+  while (safety < 100) {
+    safety += 1;
+
+    const query = new URLSearchParams();
+
+    query.append(
+      "size",
+      String(size)
+    );
+
+    query.append(
+      "sort_by",
+      "name"
+    );
+
+    query.append(
+      "sort_order",
+      "asc"
+    );
+
+    if (cursor) {
+      query.append(
+        "cursor",
+        cursor
+      );
+    }
+
+    const response = await fetch(
+      `${ADDRESS_API}${endpoint}?${query.toString()}`,
+      {
+        method: "POST",
+        headers: {
+          Accept: "application/json",
+          "Content-Type":
+            "application/json",
+        },
+        body: JSON.stringify({
+          filters,
+        }),
+      }
+    );
+
+    if (!response.ok) {
+      const body =
+        await safeResponseText(response);
+
+      throw new Error(
+        `Address API HTTP ${response.status}${
+          body ? `: ${body}` : ""
+        }`
+      );
+    }
+
+    const json =
+      await response.json();
+
+    const items =
+      Array.isArray(json?.items)
+        ? json.items
+        : [];
+
+    allItems.push(...items);
+
+    const next =
+      json?.next_page ||
+      json?.next_cursor ||
+      null;
+
+    if (!next || items.length === 0) {
+      break;
+    }
+
+    cursor = String(next);
+  }
+
+  return allItems;
+}
+
+async function safeResponseText(
+  response
+) {
+  try {
+    return await response.text();
+  } catch {
+    return "";
+  }
+}
+
+/* =========================================================
+   APP
+   ========================================================= */
+
+export default function App() {
+  const [page, setPage] =
+    useState("home");
+
+  const [showAddress, setShowAddress] =
+    useState(false);
+
+  const [loading, setLoading] =
+    useState(false);
+
+  const [
+    locationLoading,
+    setLocationLoading,
+  ] = useState(false);
+
+  const [
+    addressLoading,
+    setAddressLoading,
+  ] = useState(false);
+
+  const [
+    currentAddress,
+    setCurrentAddress,
+  ] = useState(address);
+
+  const [
+    currentCollections,
+    setCurrentCollections,
+  ] = useState(collections || []);
+
+  /* =======================================================
+     ADDRESS STATE
+     ======================================================= */
+
+  const [district, setDistrict] =
+    useState(address.district || "");
+
+  const [
+    subDistrict,
+    setSubDistrict,
+  ] = useState(
+    address.subDistrict || ""
+  );
+
+  const [city, setCity] =
+    useState(address.city || "");
+
+  const [street, setStreet] =
+    useState(address.street || "");
+
+  const [
+    houseNumber,
+    setHouseNumber,
+  ] = useState(
+    address.houseNumber || ""
+  );
+
+  /* =======================================================
+     SELECTED OBJECTS
+     ======================================================= */
+
+  const [
+    selectedDistrict,
+    setSelectedDistrict,
+  ] = useState(null);
+
+  const [
+    selectedSubDistrict,
+    setSelectedSubDistrict,
+  ] = useState(null);
+
+  const [
+    selectedCity,
+    setSelectedCity,
+  ] = useState(null);
+
+  const [
+    selectedStreet,
+    setSelectedStreet,
+  ] = useState(null);
+
+  /* =======================================================
+     OPTIONS
+     ======================================================= */
+
+  const [
+    districtOptions,
+    setDistrictOptions,
+  ] = useState([]);
+
+  const [
+    subDistrictOptions,
+    setSubDistrictOptions,
+  ] = useState([]);
+
+  const [
+    cityOptions,
+    setCityOptions,
+  ] = useState([]);
+
+  const [
+    streetOptions,
+    setStreetOptions,
+  ] = useState([]);
+
+  const [
+    houseNumberOptions,
+    setHouseNumberOptions,
+  ] = useState([]);
+
+  const [picker, setPicker] =
+    useState(null);
+
+  const [
+    pickerSearch,
+    setPickerSearch,
+  ] = useState("");
+
+  /* =======================================================
+     LOAD MUNICIPALITIES / DISTRICTS
+     ======================================================= */
+
+  const loadDistricts =
+    useCallback(async () => {
+      try {
+        setAddressLoading(true);
+
+        const items =
+          await fetchAllPages(
+            "/municipalities/search",
+            []
+          );
+
+        const formatted =
+          items.map((item) => ({
+            code: item.code,
+            name: item.name,
+            raw: item,
+          }));
+
+        setDistrictOptions(
+          removeDuplicates(formatted)
+        );
+      } catch (error) {
+        console.log(
+          "District loading error:",
+          error
+        );
+
+        Alert.alert(
+          "Address database error",
+          "Could not load the Lithuanian municipality list."
+        );
+      } finally {
+        setAddressLoading(false);
+      }
+    }, []);
+
+  /* =======================================================
+     LOAD ALL SENIŪNIJOS FOR MUNICIPALITY
+     ======================================================= */
+
+  const loadSubDistricts =
+    useCallback(
+      async (municipality) => {
+        if (!municipality?.code) {
+          setSubDistrictOptions([]);
+          return;
+        }
+
+        try {
+          setAddressLoading(true);
+
+          const filters = [
+            {
+              elderships: {
+                municipality_codes: [
+                  Number(
+                    municipality.code
+                  ),
+                ],
+              },
+            },
+          ];
+
+          let items = [];
+
+          try {
+            items =
+              await fetchAllPages(
+                "/elderships/search",
+                filters
+              );
+          } catch (firstError) {
+            console.log(
+              "Nested eldership filter failed:",
+              firstError
+            );
+
+            const all =
+              await fetchAllPages(
+                "/elderships/search",
+                []
+              );
+
+            items = all.filter(
+              (item) =>
+                Number(
+                  item?.municipality?.code
+                ) ===
+                Number(
+                  municipality.code
+                )
+            );
+          }
+
+          const formatted =
+            items.map((item) => ({
+              code: item.code,
+              name: item.name,
+              municipalityCode:
+                item?.municipality?.code,
+              raw: item,
+            }));
+
+          setSubDistrictOptions(
+            removeDuplicates(formatted)
+          );
+        } catch (error) {
+          console.log(
+            "Subdistrict loading error:",
+            error
+          );
+
+          setSubDistrictOptions([]);
+        } finally {
+          setAddressLoading(false);
+        }
+      },
+      []
+    );
+
+  /* =======================================================
+     LOAD SETTLEMENTS / CITIES / TOWNS
+     ======================================================= */
+
+  const loadCities =
+    useCallback(
+      async (
+        municipality,
+        eldership
+      ) => {
+        if (!municipality?.code) {
+          setCityOptions([]);
+          return;
+        }
+
+        try {
+          setAddressLoading(true);
+
+          let items = [];
+
+          const filters = [
+            {
+              residential_areas: {
+                municipality_codes: [
+                  Number(
+                    municipality.code
+                  ),
+                ],
+              },
+            },
+          ];
+
+          if (eldership?.code) {
+            filters[0]
+              .residential_areas
+              .eldership_codes = [
+              Number(
+                eldership.code
+              ),
+            ];
+          }
+
+          try {
+            items =
+              await fetchAllPages(
+                "/residential-areas/search",
+                filters
+              );
+          } catch (error) {
+            console.log(
+              "Residential area filter failed:",
+              error
+            );
+
+            const all =
+              await fetchAllPages(
+                "/residential-areas/search",
+                []
+              );
+
+            items = all.filter(
+              (item) => {
+                const municipalityCode =
+                  item?.municipality
+                    ?.code;
+
+                return (
+                  Number(
+                    municipalityCode
+                  ) ===
+                  Number(
+                    municipality.code
+                  )
+                );
+              }
+            );
+          }
+
+          if (eldership?.code) {
+            const filtered =
+              items.filter((item) => {
+                const possibleCode =
+                  item?.eldership?.code ||
+                  item?.eldership_code ||
+                  item?.eldershipCode;
+
+                return possibleCode == null ||
+                  Number(
+                    possibleCode
+                  ) ===
+                    Number(
+                      eldership.code
+                    );
+              });
+
+            if (filtered.length > 0) {
+              items = filtered;
+            }
+          }
+
+          const formatted =
+            items.map((item) => ({
+              code: item.code,
+              name: item.name,
+              municipalityCode:
+                item?.municipality?.code,
+              raw: item,
+            }));
+
+          setCityOptions(
+            removeDuplicates(formatted)
+          );
+        } catch (error) {
+          console.log(
+            "City loading error:",
+            error
+          );
+
+          setCityOptions([]);
+        } finally {
+          setAddressLoading(false);
+        }
+      },
+      []
+    );
+
+  /* =======================================================
+     LOAD ALL STREETS
+     ======================================================= */
+
+  const loadStreets =
+    useCallback(
+      async (
+        municipality,
+        eldership,
+        settlement
+      ) => {
+        if (!municipality?.code) {
+          setStreetOptions([]);
+          return;
+        }
+
+        try {
+          setAddressLoading(true);
+
+          let items = [];
+
+          const streetFilter = {
+            streets: {
+              municipality_codes: [
+                Number(
+                  municipality.code
+                ),
+              ],
+            },
+          };
+
+          if (eldership?.code) {
+            streetFilter.streets
+              .eldership_codes = [
+              Number(
+                eldership.code
+              ),
+            ];
+          }
+
+          if (settlement?.code) {
+            streetFilter.streets
+              .residential_area_codes = [
+              Number(
+                settlement.code
+              ),
+            ];
+          }
+
+          try {
+            items =
+              await fetchAllPages(
+                "/streets/search",
+                [streetFilter]
+              );
+          } catch (error) {
+            console.log(
+              "Street hierarchy filter failed:",
+              error
+            );
+
+            const all =
+              await fetchAllPages(
+                "/streets/search",
+                []
+              );
+
+            items = all.filter(
+              (item) => {
+                const itemMunicipality =
+                  item?.residential_area
+                    ?.municipality
+                    ?.code;
+
+                const itemSettlement =
+                  item?.residential_area
+                    ?.code;
+
+                return (
+                  Number(
+                    itemMunicipality
+                  ) ===
+                    Number(
+                      municipality.code
+                    ) &&
+                  (
+                    !settlement?.code ||
+                    Number(
+                      itemSettlement
+                    ) ===
+                      Number(
+                        settlement.code
+                      )
+                  )
+                );
+              }
+            );
+          }
+
+          items =
+            items.filter((item) => {
+              const municipalityCode =
+                item?.residential_area
+                  ?.municipality
+                  ?.code;
+
+              if (
+                municipalityCode != null &&
+                Number(
+                  municipalityCode
+                ) !==
+                  Number(
+                    municipality.code
+                  )
+              ) {
+                return false;
+              }
+
+              if (
+                settlement?.code
+              ) {
+                const settlementCode =
+                  item?.residential_area
+                    ?.code;
+
+                if (
+                  settlementCode !=
+                    null &&
+                  Number(
+                    settlementCode
+                  ) !==
+                    Number(
+                      settlement.code
+                    )
+                ) {
+                  return false;
+                }
+              }
+
+              return true;
+            });
+
+          const formatted =
+            items.map((item) => ({
+              code: item.code,
+
+              name:
+                item.full_name ||
+                item.name ||
+                "",
+
+              municipalityCode:
+                item?.residential_area
+                  ?.municipality
+                  ?.code,
+
+              residentialAreaCode:
+                item?.residential_area
+                  ?.code,
+
+              raw: item,
+            }));
+
+          setStreetOptions(
+            removeDuplicates(
+              formatted
+            ).sort((a, b) =>
+              a.name.localeCompare(
+                b.name,
+                "lt"
+              )
+            )
+          );
+        } catch (error) {
+          console.log(
+            "Street loading error:",
+            error
+          );
+
+          setStreetOptions([]);
+
+          Alert.alert(
+            "Street database error",
+            "The national street database could not be loaded."
+          );
+        } finally {
+          setAddressLoading(false);
+        }
+      },
+      []
+    );
+
+  /* =======================================================
+     LOAD HOUSE NUMBERS
+     ======================================================= */
+
+  const loadHouseNumbers =
+    useCallback(
+      async (streetItem) => {
+        if (!streetItem?.code) {
+          setHouseNumberOptions([]);
+          return;
+        }
+
+        try {
+          setAddressLoading(true);
+
+          const filters = [
+            {
+              addresses: {
+                street_codes: [
+                  Number(
+                    streetItem.code
+                  ),
+                ],
+              },
+            },
+          ];
+
+          let items = [];
+
+          try {
+            items =
+              await fetchAllPages(
+                "/addresses/search",
+                filters
+              );
+          } catch (error) {
+            console.log(
+              "Address filter failed:",
+              error
+            );
+
+            const all =
+              await fetchAllPages(
+                "/addresses/search",
+                []
+              );
+
+            items = all.filter(
+              (item) =>
+                Number(
+                  item?.street?.code ||
+                    item?.street_code
+                ) ===
+                Number(
+                  streetItem.code
+                )
+            );
+          }
+
+          const numbers =
+            items
+              .map((item) => {
+                return (
+                  item?.plot_or_building_number ||
+                  item?.house_number ||
+                  item?.number ||
+                  item?.building_number ||
+                  ""
+                );
+              })
+              .filter(Boolean)
+              .map(String);
+
+          const unique =
+            Array.from(
+              new Set(numbers)
+            ).sort((a, b) =>
+              a.localeCompare(
+                b,
+                "lt",
+                {
+                  numeric: true,
+                }
+              )
+            );
+
+          setHouseNumberOptions(
+            unique.map((number) => ({
+              code: number,
+              name: number,
+            }))
+          );
+        } catch (error) {
+          console.log(
+            "House number loading error:",
+            error
+          );
+
+          setHouseNumberOptions([]);
+        } finally {
+          setAddressLoading(false);
+        }
+      },
+      []
+    );
+
+  /* =======================================================
+     OPEN ADDRESS SCREEN
+     ======================================================= */
+
+  function openAddressScreen() {
+    setDistrict(
+      currentAddress.district || ""
+    );
+
+    setSubDistrict(
+      currentAddress.subDistrict || ""
+    );
+
+    setCity(
+      currentAddress.city || ""
+    );
+
+    setStreet(
+      currentAddress.street || ""
+    );
+
+    setHouseNumber(
+      currentAddress.houseNumber || ""
+    );
+
+    setPicker(null);
+    setPickerSearch("");
+
+    setShowAddress(true);
+
+    if (
+      districtOptions.length === 0
+    ) {
+      loadDistricts();
+    }
+  }
+
+  /* =======================================================
+     FIND MY LOCATION
+     ======================================================= */
+
+  async function findMyLocation() {
+    try {
+      setLocationLoading(true);
+
+      const permission =
+        await Location.requestForegroundPermissionsAsync();
+
+      if (
+        permission.status !==
+        "granted"
+      ) {
+        Alert.alert(
+          "Location permission",
+          "Please allow location access in your phone settings."
+        );
+
+        return;
+      }
+
+      const enabled =
+        await Location.hasServicesEnabledAsync();
+
+      if (!enabled) {
+        Alert.alert(
+          "Location is off",
+          "Turn on Location Services on your phone and try again."
+        );
+
+        return;
+      }
+
+      const position =
+        await Location.getCurrentPositionAsync(
+          {
+            accuracy:
+              Location.Accuracy.High,
+          }
+        );
+
+      const latitude =
+        position.coords.latitude;
+
+      const longitude =
+        position.coords.longitude;
+
+      console.log(
+        "GPS:",
+        latitude,
+        longitude
+      );
+
+      let results = [];
+
+      try {
+        results =
+          await Location.reverseGeocodeAsync(
+            {
+              latitude,
+              longitude,
+            }
+          );
+      } catch (geocodeError) {
+        console.log(
+          "Expo reverse geocode error:",
+          geocodeError
+        );
+      }
+
+      if (
+        !results ||
+        results.length === 0
+      ) {
+        Alert.alert(
+          "Location found",
+          "GPS worked, but your phone did not return a street address. Please choose the address manually."
+        );
+
+        return;
+      }
+
+      const result =
+        results[0];
+
+      console.log(
+        "Reverse geocode:",
+        result
+      );
+
+      const detectedCity =
+        result.city ||
+        result.subregion ||
+        result.district ||
+        "";
+
+      const detectedStreet =
+        result.street ||
+        "";
+
+      const detectedNumber =
+        result.streetNumber ||
+        "";
+
+      const detectedDistrict =
+        result.district ||
+        "";
+
+      if (detectedCity) {
+        setCity(
+          detectedCity
+        );
+      }
+
+      if (detectedStreet) {
+        setStreet(
+          detectedStreet
+        );
+      }
+
+      if (detectedNumber) {
+        setHouseNumber(
+          detectedNumber
+        );
+      }
+
+      if (detectedDistrict) {
+        setSubDistrict(
+          detectedDistrict
+        );
+      }
+
+      try {
+        if (
+          districtOptions.length === 0
+        ) {
+          await loadDistricts();
+        }
+      } catch {
+        // Keep GPS result.
+      }
+
+      Alert.alert(
+        "Location found",
+        [
+          detectedStreet,
+          detectedNumber,
+          detectedCity,
+        ]
+          .filter(Boolean)
+          .join(" ")
+          ||
+            "Coordinates found. Please complete your address."
+      );
+    } catch (error) {
+      console.log(
+        "Location error:",
+        error
+      );
+
+      Alert.alert(
+        "Location error",
+        error?.message ||
+          "Could not determine your location."
+      );
+    } finally {
+      setLocationLoading(false);
+    }
+  }
+
+  /* =======================================================
+     SELECT DISTRICT
+     ======================================================= */
+
+  async function selectDistrict(
+    item
+  ) {
+    setSelectedDistrict(item);
+
+    setDistrict(
+      item.name
+    );
+
+    setSelectedSubDistrict(
+      null
+    );
+
+    setSelectedCity(null);
+    setSelectedStreet(null);
+
+    setSubDistrict("");
+    setCity("");
+    setStreet("");
+    setHouseNumber("");
+
+    setSubDistrictOptions([]);
+    setCityOptions([]);
+    setStreetOptions([]);
+    setHouseNumberOptions([]);
+
+    setPicker(null);
+    setPickerSearch("");
+
+    await loadSubDistricts(
+      item
+    );
+  }
+
+  /* =======================================================
+     SELECT SUBDISTRICT
+     ======================================================= */
+
+  async function selectSubDistrict(
+    item
+  ) {
+    setSelectedSubDistrict(
+      item
+    );
+
+    setSubDistrict(
+      item.name
+    );
+
+    setSelectedCity(null);
+    setSelectedStreet(null);
+
+    setCity("");
+    setStreet("");
+    setHouseNumber("");
+
+    setCityOptions([]);
+    setStreetOptions([]);
+    setHouseNumberOptions([]);
+
+    setPicker(null);
+    setPickerSearch("");
+
+    const municipality =
+      selectedDistrict ||
+      districtOptions.find(
+        (x) =>
+          x.name === district
+      );
+
+    await loadCities(
+      municipality,
+      item
+    );
+  }
+
+  /* =======================================================
+     SELECT CITY
+     ======================================================= */
+
+  async function selectCity(item) {
+    setSelectedCity(item);
+
+    setCity(
+      item.name
+    );
+
+    setSelectedStreet(null);
+
+    setStreet("");
+    setHouseNumber("");
+
+    setStreetOptions([]);
+    setHouseNumberOptions([]);
+
+    setPicker(null);
+    setPickerSearch("");
+
+    const municipality =
+      selectedDistrict ||
+      districtOptions.find(
+        (x) =>
+          x.name === district
+      );
+
+    const eldership =
+      selectedSubDistrict ||
+      subDistrictOptions.find(
+        (x) =>
+          x.name ===
+          subDistrict
+      );
+
+    await loadStreets(
+      municipality,
+      eldership,
+      item
+    );
+  }
+
+  /* =======================================================
+     SELECT STREET
+     ======================================================= */
+
+  async function selectStreet(
+    item
+  ) {
+    setSelectedStreet(item);
+
+    setStreet(
+      item.name
+    );
+
+    setHouseNumber("");
+
+    setPicker(null);
+    setPickerSearch("");
+
+    await loadHouseNumbers(
+      item
+    );
+  }
+
+  /* =======================================================
+     FIND REAL ŠVARA SCHEDULE
+     ======================================================= */
+
+  async function findSchedule() {
+    const cleanDistrict =
+      district.trim();
+
+    const cleanSubDistrict =
+      subDistrict.trim();
+
+    const cleanCity =
+      city.trim();
+
+    const cleanStreet =
+      street.trim();
+
+    const cleanHouseNumber =
+      houseNumber.trim();
+
+    if (
+      !cleanDistrict ||
+      !cleanSubDistrict ||
+      !cleanCity ||
+      !cleanStreet ||
+      !cleanHouseNumber
+    ) {
+      Alert.alert(
+        "Missing information",
+        "Please select the district, seniūnija, city/town, street and enter the house number."
+      );
+
+      return;
+    }
+
+    const newAddress = {
+      district:
+        cleanDistrict,
+
+      subDistrict:
+        cleanSubDistrict,
+
+      city:
+        cleanCity,
+
+      street:
+        cleanStreet,
+
+      houseNumber:
+        cleanHouseNumber,
+    };
+
+    setLoading(true);
+
+    try {
+      console.log(
+        "Searching Švara:",
+        newAddress
+      );
+
+      const contracts =
+        await getContracts(
+          newAddress
+        );
+
+      console.log(
+        "Švara contracts:",
+        contracts
+      );
+
+      if (
+        !contracts ||
+        contracts.length === 0
+      ) {
+        Alert.alert(
+          "No schedule found",
+          "Švara did not return a collection schedule for this address."
+        );
+
+        return;
+      }
+
+      const converted =
+        contracts.map(
+          (item, index) => {
+            const description =
+              item.description ||
+              item.wasteType ||
+              item.type ||
+              "";
+
+            return {
+              id: String(
+                item.id ||
+                  item.wasteObjectId ||
+                  item.scheduleId ||
+                  item.dateFmt ||
+                  index
+              ),
+
+              title:
+                translateWasteType(
+                  description
+                ),
+
+              wasteType:
+                getWasteTypeId(
+                  description
+                ),
+
+              frequency:
+                item.frequency ||
+                item.weekDay ||
+                item.dateFmt ||
+                "Collection scheduled",
+
+              date:
+                item.date,
+
+              dateFmt:
+                item.dateFmt,
+
+              year:
+                item.year,
+
+              month:
+                item.month,
+
+              day:
+                item.day,
+
+              weekDay:
+                item.weekDay,
+
+              street:
+                item.street ||
+                newAddress.street,
+
+              address:
+                item.fullAddress ||
+                `${newAddress.street} ${newAddress.houseNumber}`,
+
+              raw:
+                item,
+            };
+          }
+        );
+
+      setCurrentAddress(
+        newAddress
+      );
+
+      setCurrentCollections(
+        converted
+      );
+
+      /*
+        CLOSE ADDRESS SCREEN
+        AND GO DIRECTLY HOME.
+      */
+
+      setShowAddress(false);
+
+      setPage("home");
+    } catch (error) {
+      console.log(
+        "Švara error:",
+        error
+      );
+
+      Alert.alert(
+        "Connection error",
+        error?.message ||
+          "Could not connect to Švara."
+      );
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  /* =======================================================
+     HELPERS FOR PICKERS
+     ======================================================= */
+
+  const filteredDistricts =
+    useMemo(
+      () =>
+        filterOptions(
+          districtOptions,
+          pickerSearch
+        ),
+      [
+        districtOptions,
+        pickerSearch,
+      ]
+    );
+
+  const filteredSubDistricts =
+    useMemo(
+      () =>
+        filterOptions(
+          subDistrictOptions,
+          pickerSearch
+        ),
+      [
+        subDistrictOptions,
+        pickerSearch,
+      ]
+    );
+
+  const filteredCities =
+    useMemo(
+      () =>
+        filterOptions(
+          cityOptions,
+          pickerSearch
+        ),
+      [
+        cityOptions,
+        pickerSearch,
+      ]
+    );
+
+  const filteredStreets =
+    useMemo(
+      () =>
+        filterOptions(
+          streetOptions,
+          pickerSearch
+        ),
+      [
+        streetOptions,
+        pickerSearch,
+      ]
+    );
+
+  /* =======================================================
+     ADDRESS SCREEN
+     ======================================================= */
+
+  if (showAddress) {
+    return (
+      <SafeAreaView
+        style={styles.safe}
+      >
+        <KeyboardAvoidingView
+          style={{ flex: 1 }}
+          behavior={
+            Platform.OS === "ios"
+              ? "padding"
+              : undefined
+          }
+        >
+          <ScrollView
+            contentContainerStyle={
+              styles.addressContainer
+            }
+            keyboardShouldPersistTaps="handled"
+          >
+            <TouchableOpacity
+              style={
+                styles.backButton
+              }
+              onPress={() => {
+                if (!loading) {
+                  setShowAddress(
+                    false
+                  );
+                }
+              }}
+            >
+              <Text
+                style={
+                  styles.backText
+                }
+              >
+                ‹ Back
+              </Text>
+            </TouchableOpacity>
+
+            <Text
+              style={
+                styles.smallTitle
+              }
+            >
+              YOUR ADDRESS
+            </Text>
+
+            <Text
+              style={
+                styles.addressTitle
+              }
+            >
+              Where do you live?
+            </Text>
+
+            <Text
+              style={
+                styles.description
+              }
+            >
+              Choose your location step by
+              step and we'll find your real
+              Švara collection schedule.
+            </Text>
+
+            {/* FIND MY LOCATION */}
+
+            <TouchableOpacity
+              style={
+                styles.locationButton
+              }
+              onPress={
+                findMyLocation
+              }
+              disabled={
+                locationLoading ||
+                loading
+              }
+            >
+              {locationLoading ? (
+                <ActivityIndicator
+                  color="#4F6548"
+                />
+              ) : (
+                <Text
+                  style={
+                    styles.locationIcon
+                  }
+                >
+                  📍
+                </Text>
+              )}
+
+              <Text
+                style={
+                  styles.locationText
+                }
+              >
+                {locationLoading
+                  ? "Finding my location..."
+                  : "Find My Location"}
+              </Text>
+            </TouchableOpacity>
+
+            {/* DISTRICT */}
+
+            <Text
+              style={styles.label}
+            >
+              DISTRICT / MUNICIPALITY
+            </Text>
+
+            <TouchableOpacity
+              style={styles.selector}
+              onPress={() => {
+                setPicker(
+                  "district"
+                );
+                setPickerSearch("");
+
+                if (
+                  districtOptions.length ===
+                  0
+                ) {
+                  loadDistricts();
+                }
+              }}
+            >
+              <Text
+                style={
+                  district
+                    ? styles.selectorText
+                    : styles.placeholder
+                }
+              >
+                {district ||
+                  "Choose district"}
+              </Text>
+
+              <Text
+                style={styles.arrow}
+              >
+                ›
+              </Text>
+            </TouchableOpacity>
+
+            {/* SENIŪNIJA */}
+
+            <Text
+              style={styles.label}
+            >
+              SENIŪNIJA / SUBDISTRICT
+            </Text>
+
+            <TouchableOpacity
+              style={[
+                styles.selector,
+                !district &&
+                  styles.disabledSelector,
+              ]}
+              disabled={!district}
+              onPress={() => {
+                setPicker(
+                  "subDistrict"
+                );
+                setPickerSearch("");
+              }}
+            >
+              <Text
+                style={
+                  subDistrict
+                    ? styles.selectorText
+                    : styles.placeholder
+                }
+              >
+                {subDistrict ||
+                  (district
+                    ? "Choose seniūnija"
+                    : "Choose district first")}
+              </Text>
+
+              <Text
+                style={styles.arrow}
+              >
+                ›
+              </Text>
+            </TouchableOpacity>
+
+            {/* CITY */}
+
+            <Text
+              style={styles.label}
+            >
+              CITY / TOWN / VILLAGE
+            </Text>
+
+            <TouchableOpacity
+              style={[
+                styles.selector,
+                !subDistrict &&
+                  styles.disabledSelector,
+              ]}
+              disabled={
+                !subDistrict
+              }
+              onPress={() => {
+                setPicker("city");
+                setPickerSearch("");
+              }}
+            >
+              <Text
+                style={
+                  city
+                    ? styles.selectorText
+                    : styles.placeholder
+                }
+              >
+                {city ||
+                  (subDistrict
+                    ? "Choose city or town"
+                    : "Choose seniūnija first")}
+              </Text>
+
+              <Text
+                style={styles.arrow}
+              >
+                ›
+              </Text>
+            </TouchableOpacity>
+
+            {/* STREET */}
+
+            <Text
+              style={styles.label}
+            >
+              STREET
+            </Text>
+
+            <TouchableOpacity
+              style={[
+                styles.selector,
+                !city &&
+                  styles.disabledSelector,
+              ]}
+              disabled={!city}
+              onPress={() => {
+                setPicker(
+                  "street"
+                );
+                setPickerSearch("");
+              }}
+            >
+              <Text
+                style={
+                  street
+                    ? styles.selectorText
+                    : styles.placeholder
+                }
+              >
+                {street ||
+                  (city
+                    ? "Search street"
+                    : "Choose city or town first")}
+              </Text>
+
+              <Text
+                style={styles.arrow}
+              >
+                ›
+              </Text>
+            </TouchableOpacity>
+
+            {/* HOUSE */}
+
+            <Text
+              style={styles.label}
+            >
+              HOUSE NUMBER
+            </Text>
+
+            <TextInput
+              style={styles.input}
+              value={
+                houseNumber
+              }
+              onChangeText={
+                setHouseNumber
+              }
+              placeholder="e.g. 33-2"
+              editable={!loading}
+              keyboardType="default"
+            />
+
+            {/* FIND SCHEDULE */}
+
+            <TouchableOpacity
+              style={[
+                styles.mainButton,
+                loading &&
+                  styles.disabledButton,
+              ]}
+              onPress={
+                findSchedule
+              }
+              disabled={loading}
+            >
+              {loading ? (
+                <View
+                  style={
+                    styles.loadingContainer
+                  }
+                >
+                  <ActivityIndicator
+                    size="small"
+                    color="#FFFFFF"
+                  />
+
+                  <Text
+                    style={
+                      styles.mainButtonText
+                    }
+                  >
+                    Searching Švara...
+                  </Text>
+                </View>
+              ) : (
+                <Text
+                  style={
+                    styles.mainButtonText
+                  }
+                >
+                  Find my schedule
+                </Text>
+              )}
+            </TouchableOpacity>
+          </ScrollView>
+        </KeyboardAvoidingView>
+
+        <PickerModal
+          visible={
+            picker !== null
+          }
+          type={picker}
+          search={pickerSearch}
+          setSearch={
+            setPickerSearch
+          }
+          onClose={() => {
+            setPicker(null);
+            setPickerSearch("");
+          }}
+          districts={
+            filteredDistricts
+          }
+          subDistricts={
+            filteredSubDistricts
+          }
+          cities={
+            filteredCities
+          }
+          streets={
+            filteredStreets
+          }
+          onDistrict={
+            selectDistrict
+          }
+          onSubDistrict={
+            selectSubDistrict
+          }
+          onCity={
+            selectCity
+          }
+          onStreet={
+            selectStreet
+          }
+          loading={
+            addressLoading
+          }
+        />
+      </SafeAreaView>
+    );
+  }
+
+  /* =======================================================
+     HOME
+     ======================================================= */
+
+  if (page === "home") {
+    return (
+      <SafeAreaView
+        style={styles.safe}
+      >
+        <ScrollView
+          contentContainerStyle={
+            styles.container
+          }
+        >
+          <Text style={styles.logo}>
+            KAUNAS ŠVARA
+          </Text>
+
+          <Text style={styles.title}>
+            Waste collection
+          </Text>
+
+          <View
+            style={styles.addressCard}
+          >
+            <Text style={styles.label}>
+              YOUR ADDRESS
+            </Text>
+
+            <Text
+              style={styles.address}
+            >
+              {currentAddress.street}{" "}
+              {currentAddress.houseNumber}
+            </Text>
+
+            <Text style={styles.city}>
+              {currentAddress.city}
+            </Text>
+
+            <Text style={styles.city}>
+              {currentAddress.subDistrict},{" "}
+              {currentAddress.district}
+            </Text>
+
+            <TouchableOpacity
+              style={
+                styles.changeButton
+              }
+              onPress={
+                openAddressScreen
+              }
+            >
+              <Text
+                style={
+                  styles.changeText
+                }
+              >
+                Change
+              </Text>
+            </TouchableOpacity>
+          </View>
+
+          <Text
+            style={styles.section}
+          >
+            Your collections
+          </Text>
+
+          {currentCollections.length ===
+          0 ? (
+            <View
+              style={styles.emptyCard}
+            >
+              <Text
+                style={
+                  styles.emptyEmoji
+                }
+              >
+                🗑️
+              </Text>
+
+              <Text
+                style={
+                  styles.emptyTitle
+                }
+              >
+                No collections yet
+              </Text>
+
+              <Text
+                style={
+                  styles.emptyText
+                }
+              >
+                Add your address to find
+                your real Švara schedule.
+              </Text>
+            </View>
+          ) : (
+            currentCollections.map(
+              (item) => {
+                const waste =
+                  wasteTypes.find(
+                    (type) =>
+                      type.id ===
+                      item.wasteType
+                  );
+
+                return (
+                  <View
+                    key={item.id}
+                    style={
+                      styles.collection
+                    }
+                  >
+                    <View
+                      style={
+                        styles.iconBox
+                      }
+                    >
+                      <Text
+                        style={
+                          styles.icon
+                        }
+                      >
+                        {waste
+                          ? waste.icon
+                          : "🗑️"}
+                      </Text>
+                    </View>
+
+                    <View
+                      style={
+                        styles.info
+                      }
+                    >
+                      <Text
+                        style={
+                          styles.collectionTitle
+                        }
+                      >
+                        {item.title}
+                      </Text>
+
+                      <Text
+                        style={
+                          styles.frequency
+                        }
+                      >
+                        {item.frequency}
+                      </Text>
+
+                      {item.dateFmt ? (
+                        <Text
+                          style={
+                            styles.dateText
+                          }
+                        >
+                          {item.dateFmt}
+                        </Text>
+                      ) : null}
+                    </View>
+
+                    <TouchableOpacity
+                      style={
+                        styles.reminder
+                      }
+                      onPress={() =>
+                        addReminder(
+                          item
+                        )
+                      }
+                    >
+                      <Text
+                        style={
+                          styles.bell
+                        }
+                      >
+                        🔔
+                      </Text>
+                    </TouchableOpacity>
+                  </View>
+                );
+              }
+            )
+          )}
+
+          <Text
+            style={styles.section}
+          >
+            Waste guide
+          </Text>
+
+          {wasteTypes.map(
+            (type) => (
+              <TouchableOpacity
+                key={type.id}
+                style={
+                  styles.guide
+                }
+                onPress={() =>
+                  showWasteInfo(
+                    type
+                  )
+                }
+              >
+                <Text
+                  style={
+                    styles.guideIcon
+                  }
+                >
+                  {type.icon}
+                </Text>
+
+                <Text
+                  style={
+                    styles.guideText
+                  }
+                >
+                  {type.name}
+                </Text>
+
+                <Text
+                  style={styles.arrow}
+                >
+                  ›
+                </Text>
+              </TouchableOpacity>
+            )
+          )}
+        </ScrollView>
+
+        <BottomNavigation
+          page={page}
+          setPage={setPage}
+        />
+      </SafeAreaView>
+    );
+  }
+
+  /* =======================================================
+     CALENDAR
+     ======================================================= */
+
+  if (page === "calendar") {
+    const dates =
+      currentCollections.filter(
+        (item) =>
+          item.date ||
+          item.dateFmt
+      );
+
+    return (
+      <SafeAreaView
+        style={styles.safe}
+      >
+        <View style={styles.page}>
+          <Text style={styles.logo}>
+            KAUNAS ŠVARA
+          </Text>
+
+          <Text style={styles.title}>
+            Calendar
+          </Text>
+
+          <Text
+            style={styles.subtitle}
+          >
+            Your collection schedule
+          </Text>
+
+          {dates.length === 0 ? (
+            <View
+              style={styles.bigCard}
+            >
+              <Text
+                style={
+                  styles.bigEmoji
+                }
+              >
+                📅
+              </Text>
+
+              <Text
+                style={
+                  styles.cardTitle
+                }
+              >
+                Collection calendar
+              </Text>
+
+              <Text
+                style={
+                  styles.cardText
+                }
+              >
+                Search your address to load
+                your real Švara collection
+                dates.
+              </Text>
+            </View>
+          ) : (
+            <ScrollView>
+              {dates.map(
+                (item) => (
+                  <View
+                    key={item.id}
+                    style={
+                      styles.calendarItem
+                    }
+                  >
+                    <View
+                      style={
+                        styles.calendarDate
+                      }
+                    >
+                      <Text
+                        style={
+                          styles.calendarDay
+                        }
+                      >
+                        {item.day ||
+                          ""}
+                      </Text>
+
+                      <Text
+                        style={
+                          styles.calendarMonth
+                        }
+                      >
+                        {monthName(
+                          item.month
+                        )}
+                      </Text>
+                    </View>
+
+                    <View
+                      style={
+                        styles.calendarInfo
+                      }
+                    >
+                      <Text
+                        style={
+                          styles.calendarTitle
+                        }
+                      >
+                        {item.title}
+                      </Text>
+
+                      <Text
+                        style={
+                          styles.frequency
+                        }
+                      >
+                        {item.weekDay ||
+                          item.dateFmt ||
+                          item.date ||
+                          ""}
+                      </Text>
+
+                      <Text
+                        style={
+                          styles.calendarAddress
+                        }
+                      >
+                        {item.address ||
+                          ""}
+                      </Text>
+                    </View>
+                  </View>
+                )
+              )}
+            </ScrollView>
+          )}
+        </View>
+
+        <BottomNavigation
+          page={page}
+          setPage={setPage}
+        />
+      </SafeAreaView>
+    );
+  }
+
+  /* =======================================================
+     SETTINGS
+     ======================================================= */
+
+  if (page === "settings") {
+    return (
+      <SafeAreaView
+        style={styles.safe}
+      >
+        <View style={styles.page}>
+          <Text style={styles.logo}>
+            KAUNAS ŠVARA
+          </Text>
+
+          <Text style={styles.title}>
+            Settings
+          </Text>
+
+          <TouchableOpacity
+            style={styles.setting}
+            onPress={() =>
+              Alert.alert(
+                "Notifications",
+                "Notification settings will be added here."
+              )
+            }
+          >
+            <Text
+              style={
+                styles.settingIcon
+              }
+            >
+              🔔
+            </Text>
+
+            <Text
+              style={
+                styles.settingText
+              }
+            >
+              Notifications
+            </Text>
+
+            <Text style={styles.arrow}>
+              ›
+            </Text>
+          </TouchableOpacity>
+
+          <TouchableOpacity
+            style={styles.setting}
+            onPress={() =>
+              Alert.alert(
+                "Account",
+                "Google and Apple sign-in will be added here."
+              )
+            }
+          >
+            <Text
+              style={
+                styles.settingIcon
+              }
+            >
+              👤
+            </Text>
+
+            <Text
+              style={
+                styles.settingText
+              }
+            >
+              Account
+            </Text>
+
+            <Text style={styles.arrow}>
+              ›
+            </Text>
+          </TouchableOpacity>
+
+          <TouchableOpacity
+            style={styles.setting}
+            onPress={
+              openAddressScreen
+            }
+          >
+            <Text
+              style={
+                styles.settingIcon
+              }
+            >
+              📍
+            </Text>
+
+            <Text
+              style={
+                styles.settingText
+              }
+            >
+              Saved address
+            </Text>
+
+            <Text style={styles.arrow}>
+              ›
+            </Text>
+          </TouchableOpacity>
+
+          <TouchableOpacity
+            style={styles.setting}
+            onPress={() =>
+              Alert.alert(
+                "Language",
+                "Language selection will be added here."
+              )
+            }
+          >
+            <Text
+              style={
+                styles.settingIcon
+              }
+            >
+              🌐
+            </Text>
+
+            <Text
+              style={
+                styles.settingText
+              }
+            >
+              Language
+            </Text>
+
+            <Text style={styles.arrow}>
+              ›
+            </Text>
+          </TouchableOpacity>
+
+          <TouchableOpacity
+            style={styles.setting}
+            onPress={() =>
+              Alert.alert(
+                "About",
+                "Kaunas Švara collection assistant."
+              )
+            }
+          >
+            <Text
+              style={
+                styles.settingIcon
+              }
+            >
+              ℹ️
+            </Text>
+
+            <Text
+              style={
+                styles.settingText
+              }
+            >
+              About
+            </Text>
+
+            <Text style={styles.arrow}>
+              ›
+            </Text>
+          </TouchableOpacity>
+        </View>
+
+        <BottomNavigation
+          page={page}
+          setPage={setPage}
+        />
+      </SafeAreaView>
+    );
+  }
+
+  return null;
+}
+
+/* =========================================================
+   PICKER MODAL
+   ========================================================= */
+
+function PickerModal({
+  visible,
+  type,
+  search,
+  setSearch,
+  onClose,
+  districts,
+  subDistricts,
+  cities,
+  streets,
+  onDistrict,
+  onSubDistrict,
+  onCity,
+  onStreet,
+  loading,
+}) {
+  let data = [];
+  let title = "";
+
+  if (type === "district") {
+    data = districts;
+    title = "Choose district";
+  }
+
+  if (type === "subDistrict") {
+    data = subDistricts;
+    title = "Choose seniūnija";
+  }
+
+  if (type === "city") {
+    data = cities;
+    title = "Choose city or town";
+  }
+
+  if (type === "street") {
+    data = streets;
+    title = "Choose street";
+  }
+
+  function select(item) {
+    if (type === "district") {
+      onDistrict(item);
+    }
+
+    if (type === "subDistrict") {
+      onSubDistrict(item);
+    }
+
+    if (type === "city") {
+      onCity(item);
+    }
+
+    if (type === "street") {
+      onStreet(item);
+    }
+  }
+
+  return (
+    <Modal
+      visible={visible}
+      animationType="slide"
+      transparent
+      onRequestClose={
+        onClose
+      }
+    >
+      <View
+        style={
+          styles.modalOverlay
+        }
+      >
+        <View
+          style={
+            styles.modalCard
+          }
+        >
+          <View
+            style={
+              styles.modalHeader
+            }
+          >
+            <Text
+              style={
+                styles.modalTitle
+              }
+            >
+              {title}
+            </Text>
+
+            <TouchableOpacity
+              onPress={onClose}
+            >
+              <Text
+                style={
+                  styles.closeText
+                }
+              >
+                ✕
+              </Text>
+            </TouchableOpacity>
+          </View>
+
+          <TextInput
+            style={
+              styles.searchInput
+            }
+            placeholder={
+              type === "street"
+                ? "Search street..."
+                : "Search..."
+            }
+            value={search}
+            onChangeText={
+              setSearch
+            }
+            autoFocus={
+              type === "street"
+            }
+            autoCapitalize="none"
+          />
+
+          {loading ? (
+            <View
+              style={
+                styles.pickerLoading
+              }
+            >
+              <ActivityIndicator
+                color="#4F6548"
+              />
+
+              <Text
+                style={
+                  styles.loadingText
+                }
+              >
+                Loading official address data...
+              </Text>
+            </View>
+          ) : null}
+
+          {!loading &&
+          data.length === 0 ? (
+            <View
+              style={
+                styles.noResults
+              }
+            >
+              <Text
+                style={
+                  styles.noResultsEmoji
+                }
+              >
+                📍
+              </Text>
+
+              <Text
+                style={
+                  styles.noResultsTitle
+                }
+              >
+                No options found
+              </Text>
+
+              <Text
+                style={
+                  styles.noResultsText
+                }
+              >
+                Try another search or choose
+                the previous location first.
+              </Text>
+            </View>
+          ) : null}
+
+          <FlatList
+            data={data}
+            keyExtractor={(
+              item,
+              index
+            ) =>
+              String(
+                item.code ||
+                  item.name ||
+                  index
+              )
+            }
+            keyboardShouldPersistTaps="handled"
+            renderItem={({
+              item,
+            }) => (
+              <TouchableOpacity
+                style={
+                  styles.option
+                }
+                onPress={() =>
+                  select(item)
+                }
+              >
+                <Text
+                  style={
+                    styles.optionText
+                  }
+                >
+                  {item.name}
+                </Text>
+
+                <Text
+                  style={
+                    styles.optionArrow
+                  }
+                >
+                  ›
+                </Text>
+              </TouchableOpacity>
+            )}
+          />
+        </View>
+      </View>
+    </Modal>
+  );
+}
+
+/* =========================================================
+   BOTTOM NAV
+   ========================================================= */
+
+function BottomNavigation({
+  page,
+  setPage,
+}) {
+  return (
+    <View style={styles.nav}>
+      <TouchableOpacity
+        style={styles.navButton}
+        onPress={() =>
+          setPage("home")
+        }
+      >
+        <Text
+          style={styles.navIcon}
+        >
+          🏠
+        </Text>
+
+        <Text
+          style={
+            page === "home"
+              ? styles.navActive
+              : styles.navText
+          }
+        >
+          Home
+        </Text>
+      </TouchableOpacity>
+
+      <TouchableOpacity
+        style={styles.navButton}
+        onPress={() =>
+          setPage("calendar")
+        }
+      >
+        <Text
+          style={styles.navIcon}
+        >
+          📅
+        </Text>
+
+        <Text
+          style={
+            page === "calendar"
+              ? styles.navActive
+              : styles.navText
+          }
+        >
+          Calendar
+        </Text>
+      </TouchableOpacity>
+
+      <TouchableOpacity
+        style={styles.navButton}
+        onPress={() =>
+          setPage("settings")
+        }
+      >
+        <Text
+          style={styles.navIcon}
+        >
+          ⚙️
+        </Text>
+
+        <Text
+          style={
+            page === "settings"
+              ? styles.navActive
+              : styles.navText
+          }
+        >
+          Settings
+        </Text>
+      </TouchableOpacity>
+    </View>
+  );
+}
+
+/* =========================================================
+   HELPERS
+   ========================================================= */
+
+function removeDuplicates(
+  items
+) {
+  const map = new Map();
+
+  items.forEach((item) => {
+    const key =
+      item.code != null
+        ? String(item.code)
+        : String(
+            item.name || ""
+          ).toLowerCase();
+
+    if (!map.has(key)) {
+      map.set(
+        key,
+        item
+      );
+    }
+  });
+
+  return Array.from(
+    map.values()
+  );
+}
+
+function filterOptions(
+  items,
+  search
+) {
+  if (!search?.trim()) {
+    return items;
+  }
+
+  const query =
+    search
+      .toLowerCase()
+      .trim();
+
+  return items.filter(
+    (item) =>
+      String(
+        item.name || ""
+      )
+        .toLowerCase()
+        .includes(query)
+  );
+}
+
+function getWasteTypeId(
+  description
+) {
+  if (!description) {
+    return "mixed";
+  }
+
+  const value =
+    String(
+      description
+    ).toLowerCase();
+
+  if (
+    value.includes("stiklo")
+  ) {
+    return "glass";
+  }
+
+  if (
+    value.includes("popier")
+  ) {
+    return "paper";
+  }
+
+  if (
+    value.includes("žali") ||
+    value.includes("žaliųjų")
+  ) {
+    return "organic";
+  }
+
+  return "mixed";
+}
+
+function translateWasteType(
+  description
+) {
+  if (!description) {
+    return "Waste collection";
+  }
+
+  const value =
+    String(
+      description
+    ).toLowerCase();
+
+  if (
+    value.includes("mišri")
+  ) {
+    return "Mixed waste";
+  }
+
+  if (
+    value.includes("stiklo")
+  ) {
+    return "Glass waste";
+  }
+
+  if (
+    value.includes("popier")
+  ) {
+    return "Paper & cardboard";
+  }
+
+  if (
+    value.includes("žali")
+  ) {
+    return "Green waste";
+  }
+
+  return description;
+}
+
+function monthName(
+  month
+) {
+  const months = [
+    "",
+    "January",
+    "February",
+    "March",
+    "April",
+    "May",
+    "June",
+    "July",
+    "August",
+    "September",
+    "October",
+    "November",
+    "December",
+  ];
+
+  return (
+    months[month] || ""
+  );
+}
+
+function addReminder(item) {
+  Alert.alert(
+    "Reminder",
+    `Reminder added for ${item.title}.`
+  );
+}
+
+function showWasteInfo(
+  type
+) {
+  Alert.alert(
+    type.name,
+    `Waste guide information for ${type.name} will be added here.`
+  );
+}
+
+/* =========================================================
+   STYLES
+   ========================================================= */
+
+const styles =
+  StyleSheet.create({
+    safe: {
+      flex: 1,
+      backgroundColor:
+        "#F4F6F1",
+    },
+
+    container: {
+      padding: 20,
+      paddingBottom: 110,
+    },
+
+    addressContainer: {
+      padding: 20,
+      paddingBottom: 40,
+    },
+
+    page: {
+      flex: 1,
+      padding: 20,
+    },
+
+    logo: {
+      marginTop: 15,
+      fontSize: 12,
+      fontWeight: "bold",
+      letterSpacing: 2,
+      color: "#697363",
+    },
+
+    title: {
+      fontSize: 30,
+      fontWeight: "bold",
+      color: "#20251F",
+      marginTop: 8,
+      marginBottom: 20,
+    },
+
+    addressTitle: {
+      fontSize: 30,
+      fontWeight: "bold",
+      color: "#20251F",
+      marginTop: 8,
+    },
+
+    smallTitle: {
+      marginTop: 15,
+      fontSize: 12,
+      fontWeight: "bold",
+      letterSpacing: 2,
+      color: "#697363",
+    },
+
+    description: {
+      color: "#697363",
+      fontSize: 15,
+      lineHeight: 22,
+      marginTop: 10,
+      marginBottom: 20,
+    },
+
+    subtitle: {
+      color: "#697363",
+      marginBottom: 20,
+    },
+
+    locationButton: {
+      backgroundColor:
+        "#E8EDE3",
+      borderRadius: 15,
+      padding: 15,
+      flexDirection: "row",
+      alignItems: "center",
+      justifyContent: "center",
+      marginBottom: 22,
+    },
+
+    locationIcon: {
+      fontSize: 20,
+      marginRight: 8,
+    },
+
+    locationText: {
+      color: "#4F6548",
+      fontWeight: "bold",
+      fontSize: 15,
+    },
+
+    addressCard: {
+      backgroundColor:
+        "#FFFFFF",
+      padding: 18,
+      borderRadius: 20,
+      marginBottom: 28,
+    },
+
+    label: {
+      fontSize: 10,
+      fontWeight: "bold",
+      color: "#8A9185",
+      marginTop: 5,
+    },
+
+    address: {
+      fontSize: 19,
+      fontWeight: "bold",
+      marginTop: 5,
+      color: "#20251F",
+    },
+
+    city: {
+      color: "#777D75",
+      marginTop: 3,
+    },
+
+    changeButton: {
+      position: "absolute",
+      right: 15,
+      top: 15,
+      backgroundColor:
+        "#E8EDE3",
+      padding: 9,
+      borderRadius: 10,
+    },
+
+    changeText: {
+      fontWeight: "bold",
+      color: "#485743",
+    },
+
+    section: {
+      fontSize: 20,
+      fontWeight: "bold",
+      marginBottom: 12,
+      color: "#252A24",
+    },
+
+    collection: {
+      backgroundColor:
+        "#FFFFFF",
+      padding: 14,
+      borderRadius: 18,
+      flexDirection: "row",
+      alignItems: "center",
+      marginBottom: 12,
+    },
+
+    iconBox: {
+      width: 50,
+      height: 50,
+      borderRadius: 15,
+      backgroundColor:
+        "#E8EDE3",
+      alignItems: "center",
+      justifyContent: "center",
+    },
+
+    icon: {
+      fontSize: 24,
+    },
+
+    info: {
+      flex: 1,
+      marginLeft: 12,
+    },
+
+    collectionTitle: {
+      fontWeight: "bold",
+      fontSize: 16,
+      color: "#20251F",
+    },
+
+    frequency: {
+      color: "#777D75",
+      marginTop: 4,
+    },
+
+    dateText: {
+      color: "#4F6548",
+      fontWeight: "bold",
+      marginTop: 4,
+    },
+
+    reminder: {
+      width: 42,
+      height: 42,
+      borderRadius: 13,
+      backgroundColor:
+        "#EEF1EA",
+      alignItems: "center",
+      justifyContent: "center",
+    },
+
+    bell: {
+      fontSize: 18,
+    },
+
+    guide: {
+      backgroundColor:
+        "#FFFFFF",
+      padding: 16,
+      borderRadius: 17,
+      flexDirection: "row",
+      alignItems: "center",
+      marginBottom: 10,
+    },
+
+    guideIcon: {
+      fontSize: 24,
+      marginRight: 14,
+    },
+
+    guideText: {
+      flex: 1,
+      fontSize: 16,
+      fontWeight: "bold",
+    },
+
+    arrow: {
+      fontSize: 25,
+      color: "#92988E",
+    },
+
+    bigCard: {
+      backgroundColor:
+        "#FFFFFF",
+      padding: 30,
+      borderRadius: 20,
+      alignItems: "center",
+    },
+
+    bigEmoji: {
+      fontSize: 50,
+    },
+
+    cardTitle: {
+      fontSize: 20,
+      fontWeight: "bold",
+      marginTop: 15,
+    },
+
+    cardText: {
+      textAlign: "center",
+      color: "#777D75",
+      marginTop: 10,
+      lineHeight: 21,
+    },
+
+    setting: {
+      backgroundColor:
+        "#FFFFFF",
+      padding: 18,
+      borderRadius: 17,
+      marginBottom: 10,
+      flexDirection: "row",
+      alignItems: "center",
+    },
+
+    settingIcon: {
+      fontSize: 20,
+      marginRight: 14,
+    },
+
+    settingText: {
+      flex: 1,
+      fontSize: 16,
+      fontWeight: "bold",
+    },
+
+    nav: {
+      height: 75,
+      backgroundColor:
+        "#FFFFFF",
+      borderTopWidth: 1,
+      borderTopColor:
+        "#E5E8E1",
+      flexDirection: "row",
+      justifyContent:
+        "space-around",
+    },
+
+    navButton: {
+      alignItems: "center",
+      justifyContent:
+        "center",
+      flex: 1,
+    },
+
+    navIcon: {
+      fontSize: 20,
+      marginBottom: 3,
+    },
+
+    navText: {
+      color: "#777D75",
+    },
+
+    navActive: {
+      color: "#4F6548",
+      fontWeight: "bold",
+    },
+
+    backButton: {
+      alignSelf: "flex-start",
+      paddingVertical: 8,
+      paddingHorizontal: 4,
+      marginBottom: 15,
+    },
+
+    backText: {
+      fontSize: 17,
+      color: "#4F6548",
+      fontWeight: "bold",
+    },
+
+    selector: {
+      backgroundColor:
+        "#FFFFFF",
+      borderRadius: 14,
+      padding: 15,
+      marginTop: 5,
+      marginBottom: 8,
+      flexDirection: "row",
+      alignItems: "center",
+      minHeight: 54,
+    },
+
+    disabledSelector: {
+      opacity: 0.55,
+    },
+
+    selectorText: {
+      flex: 1,
+      fontSize: 16,
+      color: "#20251F",
+    },
+
+    placeholder: {
+      flex: 1,
+      fontSize: 16,
+      color: "#9A9F98",
+    },
+
+    input: {
+      backgroundColor:
+        "#FFFFFF",
+      borderRadius: 14,
+      padding: 15,
+      fontSize: 16,
+      color: "#20251F",
+      marginTop: 5,
+      marginBottom: 8,
+    },
+
+    mainButton: {
+      backgroundColor:
+        "#4F6548",
+      padding: 17,
+      borderRadius: 15,
+      alignItems: "center",
+      marginTop: 20,
+    },
+
+    disabledButton: {
+      opacity: 0.7,
+    },
+
+    mainButtonText: {
+      color: "#FFFFFF",
+      fontSize: 16,
+      fontWeight: "bold",
+    },
+
+    loadingContainer: {
+      flexDirection: "row",
+      alignItems: "center",
+    },
+
+    emptyCard: {
+      backgroundColor:
+        "#FFFFFF",
+      padding: 25,
+      borderRadius: 18,
+      alignItems: "center",
+      marginBottom: 25,
+    },
+
+    emptyEmoji: {
+      fontSize: 40,
+    },
+
+    emptyTitle: {
+      fontSize: 18,
+      fontWeight: "bold",
+      marginTop: 10,
+    },
+
+    emptyText: {
+      textAlign: "center",
+      color: "#777D75",
+      marginTop: 7,
+      lineHeight: 20,
+    },
+
+    modalOverlay: {
+      flex: 1,
+      backgroundColor:
+        "rgba(0,0,0,0.35)",
+      justifyContent:
+        "flex-end",
+    },
+
+    modalCard: {
+      backgroundColor:
+        "#F4F6F1",
+      height: "88%",
+      borderTopLeftRadius: 25,
+      borderTopRightRadius: 25,
+      padding: 20,
+    },
+
+    modalHeader: {
+      flexDirection: "row",
+      alignItems: "center",
+      justifyContent:
+        "space-between",
+      marginBottom: 15,
+    },
+
+    modalTitle: {
+      fontSize: 23,
+      fontWeight: "bold",
+      color: "#20251F",
+    },
+
+    closeText: {
+      fontSize: 22,
+      color: "#697363",
+    },
+
+    searchInput: {
+      backgroundColor:
+        "#FFFFFF",
+      borderRadius: 14,
+      padding: 15,
+      fontSize: 16,
+      marginBottom: 12,
+    },
+
+    option: {
+      backgroundColor:
+        "#FFFFFF",
+      padding: 17,
+      borderRadius: 15,
+      marginBottom: 8,
+      flexDirection: "row",
+      alignItems: "center",
+    },
+
+    optionText: {
+      flex: 1,
+      fontSize: 16,
+      color: "#20251F",
+      fontWeight: "600",
+    },
+
+    optionArrow: {
+      fontSize: 23,
+      color: "#92988E",
+    },
+
+    pickerLoading: {
+      padding: 20,
+      alignItems: "center",
+    },
+
+    loadingText: {
+      marginTop: 8,
+      color: "#697363",
+      textAlign: "center",
+    },
+
+    noResults: {
+      alignItems: "center",
+      padding: 30,
+    },
+
+    noResultsEmoji: {
+      fontSize: 40,
+    },
+
+    noResultsTitle: {
+      fontSize: 18,
+      fontWeight: "bold",
+      marginTop: 10,
+    },
+
+    noResultsText: {
+      textAlign: "center",
+      color: "#777D75",
+      marginTop: 8,
+      lineHeight: 20,
+    },
+
+    calendarItem: {
+      backgroundColor:
+        "#FFFFFF",
+      borderRadius: 18,
+      padding: 15,
+      marginBottom: 10,
+      flexDirection: "row",
+    },
+
+    calendarDate: {
+      width: 60,
+      height: 60,
+      borderRadius: 15,
+      backgroundColor:
+        "#E8EDE3",
+      alignItems: "center",
+      justifyContent: "center",
+    },
+
+    calendarDay: {
+      fontSize: 22,
+      fontWeight: "bold",
+      color: "#4F6548",
+    },
+
+    calendarMonth: {
+      fontSize: 10,
+      color: "#697363",
+      fontWeight: "bold",
+    },
+
+    calendarInfo: {
+      flex: 1,
+      marginLeft: 14,
+    },
+
+    calendarTitle: {
+      fontSize: 16,
+      fontWeight: "bold",
+      color: "#20251F",
+    },
+
+    calendarAddress: {
+      fontSize: 12,
+      color: "#8A9185",
+      marginTop: 5,
+    },
+  });
