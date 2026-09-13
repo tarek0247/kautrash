@@ -22,11 +22,19 @@ jobs:
       - name: Install Dependencies
         run: npm install
 
-      - name: Build Web Assets
-        run: npx vite build
+      - name: Fix Binary Execution Permissions
+        run: chmod +x node_modules/.bin/*
+
+      - name: Build Web Application
+        run: npm run build
 
       - name: Sync Capacitor iOS
         run: npx cap sync ios
+
+      - name: Install CocoaPods
+        run: |
+          cd ios/App
+          if [ -f "Podfile" ]; then pod install; fi
 
       - name: Build Xcode App
         run: |
