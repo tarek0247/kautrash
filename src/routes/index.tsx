@@ -1,12 +1,16 @@
-import { createFileRoute } from "@tanstack/react-router";
-import { useAppActions } from "@/components/app-shell";
-import { HomeView } from "@/components/home-view";
+import { createFileRoute } from '@tanstack/react-router'
+import ReportIssue from '../ReportIssue'
 
-export const Route = createFileRoute("/")({
-  component: HomePage,
-});
+export const Route = createFileRoute('/')({
+  component: Index,
+})
 
-function HomePage() {
-  const { openAddress, openGuide } = useAppActions();
-  return <HomeView onChangeAddress={openAddress} onOpenGuide={openGuide} />;
+function Index() {
+  return (
+    <div className="p-2">
+      <h3>مرحباً بك في Kautrash</h3>
+      {/* عرض مكون الإبلاغ الجديد دون مساس بالتصميم */}
+      <ReportIssue />
+    </div>
+  )
 }
