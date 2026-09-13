@@ -7,7 +7,6 @@ export default function ReportIssue() {
   const [loading, setLoading] = useState(false);
   const [status, setStatus] = useState('');
 
-  // 1. التقاط إحداثيات الموقع
   const getLocation = () => {
     if (navigator.geolocation) {
       navigator.geolocation.getCurrentPosition(
@@ -24,7 +23,6 @@ export default function ReportIssue() {
     }
   };
 
-  // 2. اختيار أو التقاط الصورة
   const handleImageCapture = (e) => {
     const file = e.target.files[0];
     if (file) {
@@ -33,7 +31,6 @@ export default function ReportIssue() {
     }
   };
 
-  // 3. إرسال البلاغ
   const handleSubmit = async (e) => {
     e.preventDefault();
     setLoading(true);
