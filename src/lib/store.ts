@@ -3,7 +3,24 @@ import { persist } from "zustand/middleware";
 import { STORAGE_KEY } from "./constants";
 import type { Address, Collection, Lang } from "./types";
 
+export function addressKey(address: Address) {
+  return JSON.stringify(
+    [address.district, address.subDistrict, address.city, address.street, address.houseNumber].map(
+      (value) => value.trim().toLocaleLowerCase("lt"),
+    ),
+  );
+}
+
+type SavedSchedule = {
+  key: string;
+  address: Address;
+  collections: Collection[];
+  reminders?: string[];
+};
 type AppState = {
+  savedSchedules: SavedSchedule[];
+  selectSchedule: (key: string) => void;
+  removeSchedule: (key: string) => void;
   hydrated: boolean;
   refreshing: boolean;
   lang: Lang;
@@ -23,6 +40,7 @@ type AppState = {
 };
 
 type PersistSlice = {
+  savedSchedules: SavedSchedule[];
   lang: Lang;
   address: Address | null;
   collections: Collection[];
@@ -35,6 +53,27 @@ export const useAppStore = create<AppState>()(
   persist(
     (set, get) => ({
       hydrated: false,
+      savedSchedules: [],
+      selectSchedule: (key) => {
+        const saved = get().savedSchedules.find((item) => item.key === key);
+        if (saved)
+          set({
+            address: saved.address,
+            collections: saved.collections,
+            reminders: saved.reminders ?? [],
+            refreshing: false,
+          });
+      },
+      removeSchedule: (key) => {
+        const state = get();
+        const savedSchedules = state.savedSchedules.filter((item) => item.key !== key);
+        set({
+          savedSchedules,
+          ...(state.address && addressKey(state.address) === key
+            ? { address: null, collections: [], reminders: [] }
+            : {}),
+        });
+      },
       refreshing: false,
       lang: "en",
       address: null,
@@ -47,19 +86,37 @@ export const useAppStore = create<AppState>()(
       setLang: (lang) => set({ lang }),
       setNotify: (value) => set({ notify: value }),
       setHideAddress: (value) => set({ hideAddress: value }),
-      setSchedule: (address, collections) => set({ address, collections, refreshing: false }),
+      setSchedule: (address, collections) => {
+        const key = addressKey(address);
+        const state = get();
+        const savedSchedules = state.savedSchedules.filter((item) => item.key !== key);
+        const reminders = (
+          state.address && addressKey(state.address) === key
+            ? state.reminders
+            : (state.savedSchedules.find((item) => item.key === key)?.reminders ?? [])
+        ).filter((id) => collections.some((item) => item.id === id));
+        savedSchedules.push({ key, address, collections, reminders });
+        set({ address, collections, savedSchedules, refreshing: false, reminders });
+      },
       toggleReminder: (id) => {
         const reminders = get().reminders.includes(id)
           ? get().reminders.filter((item) => item !== id)
           : [...get().reminders, id];
-        set({ reminders });
+        const state = get();
+        set({
+          reminders,
+          savedSchedules: state.savedSchedules.map((item) =>
+            state.address && item.key === addressKey(state.address) ? { ...item, reminders } : item,
+          ),
+        });
       },
-      clearSchedule: () => set({ address: null, collections: [] }),
+      clearSchedule: () => set({ address: null, collections: [], reminders: [] }),
     }),
     {
       name: STORAGE_KEY,
-      version: 3,
+      version: 4,
       partialize: (state): PersistSlice => ({
+        savedSchedules: state.savedSchedules,
         lang: state.lang,
         address: state.address,
         collections: state.collections,
@@ -69,12 +126,22 @@ export const useAppStore = create<AppState>()(
       }),
       migrate: (persisted): PersistSlice => {
         const state = (persisted ?? {}) as Partial<PersistSlice>;
-        const seeded =
-          state.address?.street === "Vynuogyno g." && state.address?.houseNumber === "33-2";
         return {
-          lang: state.lang === "lt" ? "lt" : "en",
-          address: seeded ? null : (state.address ?? null),
-          collections: seeded ? [] : (state.collections ?? []),
+          savedSchedules:
+            state.savedSchedules ??
+            (state.address
+              ? [
+                  {
+                    key: addressKey(state.address),
+                    address: state.address,
+                    collections: state.collections ?? [],
+                    reminders: state.reminders ?? [],
+                  },
+                ]
+              : []),
+          lang: state.lang === "lt" || state.lang === "ru" ? state.lang : "en",
+          address: state.address ?? null,
+          collections: state.collections ?? [],
           reminders: state.reminders ?? [],
           notify: Boolean(state.notify),
           hideAddress: state.hideAddress ?? true,
@@ -87,4 +154,3 @@ export const useAppStore = create<AppState>()(
     },
   ),
 );
-

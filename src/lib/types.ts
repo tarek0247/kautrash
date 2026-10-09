@@ -1,4 +1,4 @@
-export type Lang = "en" | "lt";
+export type Lang = "en" | "lt" | "ru";
 
 export type WasteTypeId = "mixed" | "paper" | "glass" | "organic";
 

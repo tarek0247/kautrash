@@ -6,7 +6,6 @@ import { AddressSheet } from "@/components/address-sheet";
 import { WasteGuideSheet } from "@/components/waste-guide";
 import { collectionsTomorrow } from "@/lib/dates";
 import { t } from "@/lib/i18n";
-import { findScheduleFn } from "@/lib/svara-fn";
 import { useAppStore } from "@/lib/store";
 import type { WasteTypeId } from "@/lib/types";
 import { cn } from "@/lib/utils";
@@ -31,6 +30,7 @@ export function AppShell({ children }: { children: ReactNode }) {
   const hydrated = useAppStore((s) => s.hydrated);
   const notify = useAppStore((s) => s.notify);
   const collections = useAppStore((s) => s.collections);
+  const reminders = useAppStore((s) => s.reminders);
   const [addressOpen, setAddressOpen] = useState(false);
   const [guide, setGuide] = useState<WasteTypeId | null>(null);
 
@@ -53,38 +53,21 @@ export function AppShell({ children }: { children: ReactNode }) {
 
   useEffect(() => {
     if (!hydrated) return;
-    const address = useAppStore.getState().address;
-    if (!address?.street || !address.houseNumber || !address.district) return;
-    let cancelled = false;
-    useAppStore.getState().setRefreshing(true);
-    findScheduleFn({ data: address })
-      .then((result) => {
-        if (cancelled) return;
-        if (result.collections.length) {
-          useAppStore.getState().setSchedule(result.address, result.collections);
-        } else {
-          useAppStore.getState().setRefreshing(false);
-        }
-      })
-      .catch(() => {
-        if (!cancelled) useAppStore.getState().setRefreshing(false);
-      });
-    return () => {
-      cancelled = true;
-    };
+    // Direct Švara integration is paused. Never overwrite saved/imported data.
+    useAppStore.getState().setRefreshing(false);
   }, [hydrated]);
 
   useEffect(() => {
     if (!hydrated || !notify || typeof Notification === "undefined") return;
     if (Notification.permission !== "granted") return;
-    const due = collectionsTomorrow(collections);
+    const due = collectionsTomorrow(collections).filter((item) => reminders.includes(item.id));
     if (due.length === 0) return;
     const key = `svara-ping-${due.map((d) => d.id).join("-")}-${new Date().toISOString().slice(0, 10)}`;
     if (sessionStorage.getItem(key)) return;
     sessionStorage.setItem(key, "1");
     const names = due.map((d) => (lang === "lt" ? d.titleLt : d.title)).join(", ");
     new Notification(t(lang, "brand"), { body: `${t(lang, "tomorrow")}: ${names}` });
-  }, [hydrated, notify, collections, lang]);
+  }, [hydrated, notify, collections, reminders, lang]);
 
   const items = [
     { to: "/", icon: Home, label: t(lang, "navHome"), match: pathname === "/" },

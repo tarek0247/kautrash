@@ -1,4 +1,6 @@
 import { Bell, BellOff, CalendarPlus, ChevronRight, EyeOff, Lock } from "lucide-react";
+import { useState } from "react";
+import { calendarFile, downloadText } from "@/lib/calendar-export";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { WasteIcon } from "@/components/waste-icon";
@@ -22,6 +24,7 @@ export function HomeView({
   const refreshing = useAppStore((s) => s.refreshing);
   const reminders = useAppStore((s) => s.reminders);
   const toggleReminder = useAppStore((s) => s.toggleReminder);
+  const [guideSearch, setGuideSearch] = useState("");
 
   return (
     <div className="px-5 pt-6 pb-28">
@@ -88,7 +91,9 @@ export function HomeView({
       ) : collections.length === 0 ? (
         <div className="mt-3 rounded-2xl bg-surface px-6 py-10 text-center shadow-card">
           <EyeOff className="mx-auto size-8 text-primary" strokeWidth={1.5} />
-          <p className="mt-3 font-display text-xl font-semibold text-ink">{t(lang, "emptyTitle")}</p>
+          <p className="mt-3 font-display text-xl font-semibold text-ink">
+            {t(lang, "emptyTitle")}
+          </p>
           <p className="mt-2 text-sm leading-relaxed text-muted">{t(lang, "emptyBody")}</p>
           <Button className="mt-5" onClick={onChangeAddress}>
             {t(lang, "addAddress")}
@@ -116,7 +121,19 @@ export function HomeView({
         {t(lang, "wasteGuide")}
       </h2>
       <ul className="mt-3 flex flex-col gap-2">
-        {WASTE_TYPES.map((type) => (
+        <li>
+          <input
+            type="search"
+            aria-label={t(lang, "search")}
+            placeholder={t(lang, "search")}
+            value={guideSearch}
+            onChange={(e) => setGuideSearch(e.target.value)}
+            className="min-h-11 w-full rounded-xl border border-line bg-surface px-3 text-ink"
+          />
+        </li>
+        {WASTE_TYPES.filter((type) =>
+          JSON.stringify(type).toLocaleLowerCase().includes(guideSearch.trim().toLocaleLowerCase()),
+        ).map((type) => (
           <li key={type.id}>
             <button
               type="button"
@@ -125,7 +142,7 @@ export function HomeView({
             >
               <WasteIcon type={type.id} />
               <span className="flex-1 font-medium text-ink">
-                {lang === "lt" ? type.nameLt : type.nameEn}
+                {lang === "lt" ? type.nameLt : lang === "ru" ? type.nameRu : type.nameEn}
               </span>
               <ChevronRight className="size-5 text-faint" />
             </button>
@@ -147,7 +164,12 @@ function CollectionCard({
 }) {
   const lang = useAppStore((s) => s.lang);
   const next = nextDate(item.dates);
-  const title = lang === "lt" ? item.titleLt : item.title;
+  const title =
+    lang === "lt"
+      ? item.titleLt
+      : lang === "ru"
+        ? WASTE_TYPES.find((type) => type.id === item.wasteType)?.nameRu
+        : item.title;
   const frequency = lang === "lt" ? item.frequencyLt : item.frequency;
 
   return (
@@ -178,14 +200,21 @@ function CollectionCard({
           {reminded ? <Bell className="size-4" /> : <BellOff className="size-4" />}
         </button>
       </div>
-      {item.subscriptionUrl ? (
-        <a
-          href={item.subscriptionUrl}
+      {item.dates.length > 0 ? (
+        <button
+          type="button"
+          onClick={() =>
+            downloadText(
+              "kautrash.ics",
+              calendarFile([item], reminded ? [item.id] : []),
+              "text/calendar;charset=utf-8",
+            )
+          }
           className="mt-2 inline-flex h-10 items-center gap-2 rounded-lg px-2 text-sm font-medium text-primary"
         >
           <CalendarPlus className="size-4" />
           {t(lang, "addToCalendar")}
-        </a>
+        </button>
       ) : null}
     </li>
   );
