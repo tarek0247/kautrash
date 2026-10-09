@@ -7,12 +7,29 @@ test("validates calendar days and deduplicates", () => {
   assert.deepEqual(importDays("2026-12-01\n2026-12-01"), ["2026-12-01"]);
   assert.throws(() => importDays("next Monday"));
 });
-test("imports all-day ICS but rejects unsupported recurrence and timed events", () => {
-  assert.deepEqual(importDays("BEGIN:VCALENDAR\r\nDTSTART;VALUE=DATE:20261201\r\nEND:VCALENDAR"), [
-    "2026-12-01",
+test("imports all-day ICS and expands recurring collections", () => {
+  assert.deepEqual(
+    importDays("BEGIN:VCALENDAR\r\nBEGIN:VEVENT\r\nDTSTART;VALUE=DATE:20261201\r\nEND:VEVENT\r\nEND:VCALENDAR"),
+    ["2026-12-01"],
+  );
+  const weekly = [
+    "BEGIN:VCALENDAR",
+    "BEGIN:VEVENT",
+    "DTSTART;VALUE=DATE:20261005",
+    "RRULE:FREQ=WEEKLY;BYDAY=MO,WE",
+    "EXDATE;VALUE=DATE:20261012",
+    "RDATE;VALUE=DATE:20261011",
+    "END:VEVENT",
+    "END:VCALENDAR",
+  ].join("\r\n");
+  assert.deepEqual(importDays(weekly, new Date("2026-10-09T00:00:00Z")).slice(0, 4), [
+    "2026-10-11",
+    "2026-10-14",
+    "2026-10-19",
+    "2026-10-21",
   ]);
-  assert.throws(() => importDays("BEGIN:VCALENDAR\nRRULE:FREQ=WEEKLY\nDTSTART:20261201"));
   assert.throws(() => importDays("BEGIN:VCALENDAR\nDTSTART:20261201T120000Z"));
+  assert.throws(() => importDays("BEGIN:VCALENDAR\nBEGIN:VEVENT\nDTSTART;VALUE=DATE:20261201\nRRULE:FREQ=HOURLY\nEND:VEVENT"));
 });
 test("exports portable all-day events with next-day end and without addresses", () => {
   const output = calendarFile(
