@@ -155,9 +155,9 @@ export function ScheduleTools({ onAdd }: { onAdd: () => void }) {
           </label>
           <label className="mt-3 block text-sm">
             {say(
-              "Or import TXT / ICS (all-day dates, no recurrence)",
-              "Arba TXT / ICS (visos dienos datos, be kartojimo)",
-              "Или TXT / ICS (даты без времени и повторений)",
+              "Or import TXT / ICS (recurring dates expand for 2 years)",
+              "Arba importuokite TXT / ICS (pasikartojimai išplečiami 2 metams)",
+              "Или импортируйте TXT / ICS (повторы раскрываются на 2 года)",
             )}
             <input
               className="mt-2 block w-full text-sm"
@@ -168,9 +168,18 @@ export function ScheduleTools({ onAdd }: { onAdd: () => void }) {
                 if (!file) return;
                 try {
                   if (file.size > 500_000) throw new Error("Maximum 500 KB");
-                  setDates(importDays(await file.text()).join("\n"));
+                  const imported = importDays(await file.text());
+                  setDates(imported.join("\n"));
+                  setSource((current) => current.trim() || file.name);
+                  toast.success(
+                    say(
+                      `Loaded ${imported.length} collection dates`,
+                      `Įkelta datų: ${imported.length}`,
+                      `Загружено дат: ${imported.length}`,
+                    ),
+                  );
                 } catch (error) {
-                  toast.error(String(error));
+                  toast.error(error instanceof Error ? error.message : String(error));
                 }
                 e.target.value = "";
               }}
