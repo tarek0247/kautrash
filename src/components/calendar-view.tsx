@@ -14,6 +14,7 @@ import {
 import { t } from "@/lib/i18n";
 import { useAppStore } from "@/lib/store";
 import { cn } from "@/lib/utils";
+import { WASTE_TYPES } from "@/lib/waste";
 
 export function CalendarView() {
   const lang = useAppStore((s) => s.lang);
@@ -39,7 +40,9 @@ export function CalendarView() {
   });
 
   const monthEvents = events.filter((row) => isSameMonth(row.date, cursor));
-  const laterEvents = events.filter((row) => row.date >= addMonths(startOfMonth(cursor), 1)).slice(0, 8);
+  const laterEvents = events
+    .filter((row) => row.date >= addMonths(startOfMonth(cursor), 1))
+    .slice(0, 8);
 
   return (
     <div className="px-5 pt-6 pb-28">
@@ -61,7 +64,9 @@ export function CalendarView() {
           >
             <ChevronLeft className="size-5" />
           </button>
-          <p className="font-display text-lg font-semibold capitalize">{monthTitle(cursor, lang)}</p>
+          <p className="font-display text-lg font-semibold capitalize">
+            {monthTitle(cursor, lang)}
+          </p>
           <button
             type="button"
             className="inline-flex size-11 items-center justify-center rounded-lg text-ink hover:bg-surface-2"
@@ -101,6 +106,7 @@ export function CalendarView() {
                         className={cn(
                           "size-1 rounded-full",
                           mark.collection.wasteType === "mixed" && "bg-mixed",
+                          mark.collection.wasteType === "unspecified" && "bg-primary",
                           mark.collection.wasteType === "paper" && "bg-paper",
                           mark.collection.wasteType === "glass" && "bg-glass",
                           mark.collection.wasteType === "organic" && "bg-organic",
@@ -142,11 +148,7 @@ export function CalendarView() {
   );
 }
 
-function EventList({
-  rows,
-}: {
-  rows: ReturnType<typeof allUpcoming>;
-}) {
+function EventList({ rows }: { rows: ReturnType<typeof allUpcoming> }) {
   const lang = useAppStore((s) => s.lang);
   if (rows.length === 0) {
     return <p className="mt-3 text-sm text-muted">{t(lang, "calendarEmpty")}</p>;
@@ -166,7 +168,12 @@ function EventList({
           <WasteIcon type={row.collection.wasteType} size="sm" />
           <div className="min-w-0 flex-1">
             <p className="truncate font-semibold text-ink">
-              {lang === "lt" ? row.collection.titleLt : row.collection.title}
+              {lang === "lt"
+                ? row.collection.titleLt
+                : lang === "ru"
+                  ? (WASTE_TYPES.find((type) => type.id === row.collection.wasteType)?.nameRu ??
+                    row.collection.title)
+                  : row.collection.title}
             </p>
             <p className="text-xs text-muted capitalize">{weekdayLong(row.date, lang)}</p>
             <p className="truncate text-xs text-faint">{longDate(row.date, lang)}</p>

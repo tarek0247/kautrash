@@ -3,6 +3,7 @@ import type { WasteTypeId } from "@/lib/types";
 import { cn } from "@/lib/utils";
 
 const MAP = {
+  unspecified: { Icon: Recycle, className: "bg-primary-soft text-primary" },
   mixed: { Icon: Trash2, className: "bg-mixed/12 text-mixed" },
   paper: { Icon: Package, className: "bg-paper/12 text-paper" },
   glass: { Icon: Wine, className: "bg-glass/12 text-glass" },
@@ -20,7 +21,11 @@ export function WasteIcon({
 }) {
   const { Icon, className: tone } = MAP[type] ?? MAP.mixed;
   const box =
-    size === "lg" ? "size-14 rounded-xl" : size === "sm" ? "size-9 rounded-md" : "size-12 rounded-lg";
+    size === "lg"
+      ? "size-14 rounded-xl"
+      : size === "sm"
+        ? "size-9 rounded-md"
+        : "size-12 rounded-lg";
   const icon = size === "lg" ? "size-7" : size === "sm" ? "size-4" : "size-5";
   return (
     <span

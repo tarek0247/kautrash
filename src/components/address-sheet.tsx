@@ -6,7 +6,6 @@ import { Input } from "@/components/ui/input";
 import { PickerDrawer } from "@/components/picker-drawer";
 import { t } from "@/lib/i18n";
 import {
-  findScheduleFn,
   getCitiesFn,
   getDistrictsFn,
   getHouseNumbersFn,
@@ -14,8 +13,9 @@ import {
   getSubDistrictsFn,
   reverseGeocodeFn,
 } from "@/lib/svara-fn";
-import { useAppStore } from "@/lib/store";
+import { useAppStore, addressKey } from "@/lib/store";
 import type { Address, NamedOption } from "@/lib/types";
+import { refreshSchedule, lookupMessage } from "@/lib/schedule-lookup";
 import { cn } from "@/lib/utils";
 
 type PickerKind = "district" | "subDistrict" | "city" | "street" | "house" | null;
@@ -41,13 +41,7 @@ function emptyAddress(): Address {
   return { district: "", subDistrict: "", city: "", street: "", houseNumber: "" };
 }
 
-export function AddressSheet({
-  open,
-  onClose,
-}: {
-  open: boolean;
-  onClose: () => void;
-}) {
+export function AddressSheet({ open, onClose }: { open: boolean; onClose: () => void }) {
   const lang = useAppStore((s) => s.lang);
   const saved = useAppStore((s) => s.address);
   const setSchedule = useAppStore((s) => s.setSchedule);
@@ -213,10 +207,7 @@ export function AddressSheet({
     }
   }
 
-  async function selectCity(
-    item: NamedOption,
-    opts?: { municipalityCode?: number },
-  ) {
+  async function selectCity(item: NamedOption, opts?: { municipalityCode?: number }) {
     setCity(item.name);
     setCityCode(asCode(item.code));
     setSelectedStreet(null);
@@ -317,12 +308,12 @@ export function AddressSheet({
     }
     setSaving(true);
     try {
-      const result = await findScheduleFn({ data: payload });
-      if (!result.collections.length) {
-        toast.error(t(lang, "noSchedule"));
-        return;
-      }
-      setSchedule(result.address, result.collections);
+      const existing = useAppStore
+        .getState()
+        .savedSchedules.find((item) => item.key === addressKey(payload));
+      setSchedule(payload, existing?.collections ?? []);
+      const status = await refreshSchedule(payload);
+      if (status !== "ready") toast.info(lookupMessage(status, lang), { duration: 9000 });
       onClose();
     } catch (error) {
       toast.error(error instanceof Error ? error.message : t(lang, "connectionError"));
@@ -452,9 +443,7 @@ export function AddressSheet({
                     }),
                   );
                 } catch (error) {
-                  toast.error(
-                    error instanceof Error ? error.message : t(lang, "connectionError"),
-                  );
+                  toast.error(error instanceof Error ? error.message : t(lang, "connectionError"));
                 } finally {
                   setListLoading(false);
                 }
@@ -506,12 +495,7 @@ export function AddressSheet({
           ) : null}
         </label>
 
-        <Button
-          size="lg"
-          className="mt-6 w-full"
-          onClick={() => void submit()}
-          disabled={saving}
-        >
+        <Button size="lg" className="mt-6 w-full" onClick={() => void submit()} disabled={saving}>
           {saving ? <LoaderCircle className="size-4 animate-spin" /> : null}
           {saving ? t(lang, "searching") : t(lang, "findSchedule")}
         </Button>

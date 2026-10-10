@@ -4,6 +4,11 @@ export const WASTE_TYPES: {
   id: WasteTypeId;
   nameEn: string;
   nameLt: string;
+  nameRu: string;
+  hintRu: string;
+  bodyRu: string;
+  yesRu: string[];
+  noRu: string[];
   hintEn: string;
   hintLt: string;
   bodyEn: string;
@@ -15,6 +20,12 @@ export const WASTE_TYPES: {
 }[] = [
   {
     id: "mixed",
+    nameRu: "Смешанные отходы",
+    hintRu: "Серый / чёрный контейнер",
+    bodyRu:
+      "Бытовые отходы, не пригодные для переработки или компостирования. Завяжите пакеты и выставьте контейнер накануне вывоза.",
+    yesRu: ["Грязная упаковка", "Средства гигиены", "Разбитая керамика", "Пыль из пылесоса"],
+    noRu: ["Стеклянные бутылки", "Чистая бумага", "Садовые отходы", "Электроника"],
     nameEn: "Mixed waste",
     nameLt: "Mišrios atliekos",
     hintEn: "Grey / black bin",
@@ -24,12 +35,33 @@ export const WASTE_TYPES: {
     bodyLt:
       "Buitinės atliekos, kurių negalima perdirbti ar kompostuoti. Maišus suriškite ir konteinerį pastatykite vakare prieš išvežimą.",
     yesEn: ["Dirty packaging", "Hygiene products", "Broken ceramics", "Vacuum dust"],
-    yesLt: ["Nešvarūs pakuočių likučiai", "Higienos priemonės", "Sudužusi keramika", "Dulkių siurblio turinys"],
+    yesLt: [
+      "Nešvarūs pakuočių likučiai",
+      "Higienos priemonės",
+      "Sudužusi keramika",
+      "Dulkių siurblio turinys",
+    ],
     noEn: ["Glass bottles", "Clean paper", "Garden waste", "Electronics"],
     noLt: ["Stiklo buteliai", "Švarus popierius", "Žaliosios atliekos", "Elektronika"],
   },
   {
     id: "paper",
+    nameRu: "Бумага и пластик",
+    hintRu: "Жёлтый / синий контейнер для упаковки",
+    bodyRu:
+      "Чистая сухая упаковка для переработки. Ополосните ёмкости и сплющите картон. Уточняйте местные правила у оператора.",
+    yesRu: [
+      "Газеты и картон",
+      "Пластиковые бутылки",
+      "Металлические банки",
+      "Чистая многослойная упаковка",
+    ],
+    noRu: [
+      "Жирные коробки от пиццы",
+      "Плёнка с остатками еды",
+      "Кассовые чеки",
+      "Упаковочный пенопласт",
+    ],
     nameEn: "Paper & plastic",
     nameLt: "Popierius ir plastikas",
     hintEn: "Yellow / blue packaging bin",
@@ -39,12 +71,23 @@ export const WASTE_TYPES: {
     bodyLt:
       "Švarios, sausos pakuotės, surenkamos kaip antrinės žaliavos. Išskalaukite indelius ir suplokštinkite kartoną.",
     yesEn: ["Newspapers & cardboard", "Plastic bottles", "Metal cans", "Clean tetra packs"],
-    yesLt: ["Laikraščiai ir kartonas", "Plastikiniai buteliai", "Metalinės skardinės", "Švarūs tetra pakai"],
+    yesLt: [
+      "Laikraščiai ir kartonas",
+      "Plastikiniai buteliai",
+      "Metalinės skardinės",
+      "Švarūs tetra pakai",
+    ],
     noEn: ["Greasy pizza boxes", "Cling film with food", "Receipts", "Styrofoam peanuts"],
     noLt: ["Riebaluotos picos dėžės", "Plėvelė su maistu", "Kasiniai čekiai", "Putplastis"],
   },
   {
     id: "glass",
+    nameRu: "Стекло",
+    hintRu: "Зелёный / белый контейнер",
+    bodyRu:
+      "Только бутылки и банки. По возможности снимите крышки. Выбрасывайте стекло без пакетов.",
+    yesRu: ["Бутылки", "Стеклянные банки", "Стеклянная косметическая упаковка"],
+    noRu: ["Оконное стекло", "Зеркала", "Лампочки", "Керамика"],
     nameEn: "Glass",
     nameLt: "Stiklas",
     hintEn: "Green / white glass bin",
@@ -60,6 +103,12 @@ export const WASTE_TYPES: {
   },
   {
     id: "organic",
+    nameRu: "Садовые отходы",
+    hintRu: "Коричневый садовый контейнер",
+    bodyRu:
+      "Растительные отходы сада и парка. Сезон вывоза уточняйте у оператора. Не добавляйте землю, камни и пластиковые горшки.",
+    yesRu: ["Скошенная трава", "Листья", "Мелкие ветки", "Сорняки"],
+    noRu: ["Приготовленная еда", "Земля и камни", "Пластиковые горшки", "Отходы животных"],
     nameEn: "Green waste",
     nameLt: "Žaliosios atliekos",
     hintEn: "Brown garden bin",
@@ -71,7 +120,12 @@ export const WASTE_TYPES: {
     yesEn: ["Grass clippings", "Leaves", "Small branches", "Weeds"],
     yesLt: ["Nupjauta žolė", "Lapai", "Smulkios šakos", "Piktžolės"],
     noEn: ["Cooked food", "Soil & stones", "Plastic plant pots", "Animal waste"],
-    noLt: ["Termiškai apdorotas maistas", "Žemė ir akmenys", "Plastikiniai vazonai", "Gyvūnų atliekos"],
+    noLt: [
+      "Termiškai apdorotas maistas",
+      "Žemė ir akmenys",
+      "Plastikiniai vazonai",
+      "Gyvūnų atliekos",
+    ],
   },
 ];
 

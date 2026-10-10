@@ -28,9 +28,11 @@ export function WasteGuideSheet({
                   <WasteIcon type={type.id} size="lg" />
                   <div>
                     <Drawer.Title className="font-display text-2xl font-semibold tracking-tight text-ink">
-                      {lang === "lt" ? type.nameLt : type.nameEn}
+                      {lang === "lt" ? type.nameLt : lang === "ru" ? type.nameRu : type.nameEn}
                     </Drawer.Title>
-                    <p className="text-sm text-muted">{lang === "lt" ? type.hintLt : type.hintEn}</p>
+                    <p className="text-sm text-muted">
+                      {lang === "lt" ? type.hintLt : lang === "ru" ? type.hintRu : type.hintEn}
+                    </p>
                   </div>
                 </div>
                 <button
@@ -43,16 +45,16 @@ export function WasteGuideSheet({
                 </button>
               </div>
               <p className="mt-4 text-sm leading-relaxed text-ink-soft">
-                {lang === "lt" ? type.bodyLt : type.bodyEn}
+                {lang === "lt" ? type.bodyLt : lang === "ru" ? type.bodyRu : type.bodyEn}
               </p>
               <Section
                 title={t(lang, "yes")}
-                items={lang === "lt" ? type.yesLt : type.yesEn}
+                items={lang === "lt" ? type.yesLt : lang === "ru" ? type.yesRu : type.yesEn}
                 tone="yes"
               />
               <Section
                 title={t(lang, "no")}
-                items={lang === "lt" ? type.noLt : type.noEn}
+                items={lang === "lt" ? type.noLt : lang === "ru" ? type.noRu : type.noEn}
                 tone="no"
               />
             </div>
@@ -63,24 +65,13 @@ export function WasteGuideSheet({
   );
 }
 
-function Section({
-  title,
-  items,
-  tone,
-}: {
-  title: string;
-  items: string[];
-  tone: "yes" | "no";
-}) {
+function Section({ title, items, tone }: { title: string; items: string[]; tone: "yes" | "no" }) {
   return (
     <div className="mt-5">
       <p className="text-[11px] font-semibold tracking-[0.16em] text-faint uppercase">{title}</p>
       <ul className="mt-2 flex flex-col gap-2">
         {items.map((item) => (
-          <li
-            key={item}
-            className="rounded-lg bg-surface px-3 py-2.5 text-sm text-ink shadow-card"
-          >
+          <li key={item} className="rounded-lg bg-surface px-3 py-2.5 text-sm text-ink shadow-card">
             <span
               className={
                 tone === "yes"

@@ -27,11 +27,11 @@ const houseSchema = z.object({
 });
 
 const addressSchema = z.object({
-  district: z.string(),
-  subDistrict: z.string().optional(),
-  city: z.string().optional(),
-  street: z.string(),
-  houseNumber: z.string(),
+  district: z.string().max(120),
+  subDistrict: z.string().max(120).optional(),
+  city: z.string().max(120).optional(),
+  street: z.string().max(200),
+  houseNumber: z.string().max(40),
 });
 
 const geoSchema = z.object({
@@ -77,7 +77,7 @@ export const getHouseNumbersFn = createServerFn({ method: "POST" })
 export const findScheduleFn = createServerFn({ method: "POST" })
   .validator(addressSchema)
   .handler(async ({ data }) => {
-    const api = await import("./svara-api.server");
+    const api = await import("./schedule-api.server");
     const address = {
       district: data.district.trim(),
       subDistrict: (data.subDistrict ?? "").trim(),
@@ -85,8 +85,7 @@ export const findScheduleFn = createServerFn({ method: "POST" })
       street: data.street.trim(),
       houseNumber: data.houseNumber.trim(),
     };
-    const collections = await api.findSchedule(address);
-    return { address, collections };
+    return api.findSchedule(address);
   });
 
 export const reverseGeocodeFn = createServerFn({ method: "POST" })

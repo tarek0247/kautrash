@@ -1,10 +1,10 @@
 import { addDays, format, isBefore, isSameDay, startOfDay, startOfMonth } from "date-fns";
-import { enUS, lt } from "date-fns/locale";
+import { enUS, lt, ru } from "date-fns/locale";
 import type { Lang } from "./types";
 import type { Collection, CollectionDate } from "./types";
 
 export function localeOf(lang: Lang) {
-  return lang === "lt" ? lt : enUS;
+  return lang === "lt" ? lt : lang === "ru" ? ru : enUS;
 }
 
 export function parseIsoDay(iso: string) {
@@ -26,8 +26,10 @@ export function nextDate(dates: CollectionDate[], from = new Date()) {
 
 export function relativeLabel(date: Date, lang: Lang, inDaysTemplate: string) {
   const today = startOfDay(new Date());
-  if (isSameDay(date, today)) return lang === "lt" ? "Šiandien" : "Today";
-  if (isSameDay(date, addDays(today, 1))) return lang === "lt" ? "Rytoj" : "Tomorrow";
+  if (isSameDay(date, today))
+    return lang === "lt" ? "Šiandien" : lang === "ru" ? "Сегодня" : "Today";
+  if (isSameDay(date, addDays(today, 1)))
+    return lang === "lt" ? "Rytoj" : lang === "ru" ? "Завтра" : "Tomorrow";
   const diff = Math.round((startOfDay(date).getTime() - today.getTime()) / 86400000);
   return inDaysTemplate.replace("{n}", String(diff));
 }
@@ -72,7 +74,10 @@ export function allUpcoming(collections: Collection[], from = new Date()) {
       rows.push({ collection, date, iso: item.iso });
     }
   }
-  rows.sort((a, b) => a.date.getTime() - b.date.getTime() || a.collection.title.localeCompare(b.collection.title));
+  rows.sort(
+    (a, b) =>
+      a.date.getTime() - b.date.getTime() || a.collection.title.localeCompare(b.collection.title),
+  );
   return rows;
 }
 

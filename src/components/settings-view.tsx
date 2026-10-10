@@ -1,8 +1,10 @@
 import { Bell, EyeOff, Globe, Info, Lock, MapPin } from "lucide-react";
 import { toast } from "sonner";
 import { t } from "@/lib/i18n";
-import { useAppStore } from "@/lib/store";
+import { useAppStore, addressKey } from "@/lib/store";
 import { cn } from "@/lib/utils";
+import { ScheduleTools } from "@/components/schedule-tools";
+import { ReportTools } from "@/components/report-tools";
 
 export function SettingsView({ onChangeAddress }: { onChangeAddress: () => void }) {
   const lang = useAppStore((s) => s.lang);
@@ -15,6 +17,10 @@ export function SettingsView({ onChangeAddress }: { onChangeAddress: () => void 
 
   async function toggleNotify() {
     if (!notify) {
+      if (typeof Notification === "undefined") {
+        toast.error(t(lang, "notifyNeed"));
+        return;
+      }
       if (typeof Notification !== "undefined" && Notification.permission !== "granted") {
         const permission = await Notification.requestPermission();
         if (permission !== "granted") {
@@ -111,7 +117,17 @@ export function SettingsView({ onChangeAddress }: { onChangeAddress: () => void 
               <span className="mt-0.5 block text-sm text-muted">{t(lang, "languageHint")}</span>
             </span>
           </div>
-          <div className="mt-3 grid grid-cols-2 gap-2">
+          <div className="mt-3 grid grid-cols-3 gap-2">
+            <button
+              type="button"
+              onClick={() => setLang("ru")}
+              className={cn(
+                "h-11 rounded-lg text-sm font-semibold",
+                lang === "ru" ? "bg-primary text-primary-fg" : "bg-surface-2 text-ink-soft",
+              )}
+            >
+              Русский
+            </button>
             <button
               type="button"
               onClick={() => setLang("en")}
@@ -171,6 +187,8 @@ export function SettingsView({ onChangeAddress }: { onChangeAddress: () => void 
           </div>
         </li>
       </ul>
+      <ScheduleTools key={address ? addressKey(address) : "no-address"} onAdd={onChangeAddress} />
+      <ReportTools />
     </div>
   );
 }

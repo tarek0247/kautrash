@@ -9,6 +9,7 @@ const KNOWN_FN_ID =
 type Cache = { id: string; at: number };
 let fnCache: Cache | null = null;
 const FN_TTL_MS = 6 * 60 * 60 * 1000;
+class SvaraAccessError extends Error {}
 
 type SerovalNode = {
   t?: number;
@@ -70,12 +71,16 @@ function decode(node: unknown): unknown {
 async function callFn(fnId: string, apiPath: string) {
   const payload = encodeURIComponent(encodeRequest(apiPath));
   const response = await fetch(`${BASE}/_serverFn/${fnId}?payload=${payload}`, {
+    signal: AbortSignal.timeout(12000),
     headers: {
       Accept: "application/json",
       "x-tsr-serverFn": "true",
       "User-Agent": "KaunasSvaraAlmanac/1.0",
     },
   });
+  if (response.status === 401 || response.status === 403) {
+    throw new SvaraAccessError("Švara requires verification on its official website. Open the official schedule search and import the calendar from there.");
+  }
   if (!response.ok) {
     throw new Error(`Švara HTTP ${response.status}`);
   }
@@ -123,7 +128,8 @@ async function resolveFnId(force = false): Promise<string> {
         fnCache = { id, at: Date.now() };
         return id;
       }
-    } catch {
+    } catch (error) {
+      if (error instanceof SvaraAccessError) throw error;
       // stale
     }
   }
@@ -135,7 +141,8 @@ async function resolveFnId(force = false): Promise<string> {
         fnCache = { id, at: Date.now() };
         return id;
       }
-    } catch {
+    } catch (error) {
+      if (error instanceof SvaraAccessError) throw error;
       // next
     }
   }
@@ -157,7 +164,8 @@ async function svara<T>(apiPath: string): Promise<T> {
   };
   try {
     return await run(false);
-  } catch {
+  } catch (error) {
+    if (error instanceof SvaraAccessError) throw error;
     fnCache = null;
     return await run(true);
   }
