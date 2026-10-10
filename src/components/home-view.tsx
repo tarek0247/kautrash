@@ -1,3 +1,6 @@
+import { Link } from "@tanstack/react-router";
+import { refreshSchedule, lookupMessage } from "@/lib/schedule-lookup";
+import { scheduleSources } from "@/lib/schedule-sources";
 import { Bell, BellOff, CalendarPlus, ChevronRight, EyeOff, Lock } from "lucide-react";
 import { useState } from "react";
 import { calendarFile, downloadText } from "@/lib/calendar-export";
@@ -21,6 +24,7 @@ export function HomeView({
   const address = useAppStore((s) => s.address);
   const hideAddress = useAppStore((s) => s.hideAddress) !== false;
   const collections = useAppStore((s) => s.collections);
+  const lookupStatus = useAppStore((s) => s.lookupStatus);
   const refreshing = useAppStore((s) => s.refreshing);
   const reminders = useAppStore((s) => s.reminders);
   const toggleReminder = useAppStore((s) => s.toggleReminder);
@@ -77,6 +81,51 @@ export function HomeView({
           <p className="mt-2 pr-2 text-sm text-muted">{t(lang, "emptyBody")}</p>
         )}
       </section>
+
+      {address && (
+        <section className="mt-3 rounded-xl bg-surface p-4 shadow-card">
+          <button
+            type="button"
+            disabled={refreshing}
+            onClick={() => void refreshSchedule(address)}
+            className="min-h-11 rounded-lg bg-primary-soft px-3 py-2 text-sm font-semibold text-primary disabled:opacity-50"
+          >
+            {refreshing ? t(lang, "searching") : t(lang, "findSchedule")}
+          </button>
+          {lookupStatus && (
+            <p role="status" className="mt-2 text-sm text-muted">
+              {lookupMessage(lookupStatus, lang)}
+            </p>
+          )}
+          {lookupStatus &&
+            lookupStatus !== "ready" &&
+            scheduleSources(address.district).map((provider) => (
+              <a
+                key={provider.url}
+                href={provider.url}
+                target="_blank"
+                rel="noreferrer"
+                className="mt-2 block text-sm text-primary underline"
+              >
+                {provider.name}
+                {provider.operatorCheck
+                  ? lang === "lt"
+                    ? " (jei jūsų tiekėjas)"
+                    : lang === "ru"
+                      ? " (если ваш оператор)"
+                      : " (if your operator)"
+                  : ""}
+              </a>
+            ))}
+          <Link to="/settings" className="mt-2 block text-sm text-primary underline">
+            {lang === "lt"
+              ? "Atsarginis failo importas"
+              : lang === "ru"
+                ? "Резервный импорт файла"
+                : "Backup file import"}
+          </Link>
+        </section>
+      )}
 
       <h2 className="mt-8 font-display text-xl font-semibold tracking-tight text-ink">
         {t(lang, "collections")}
@@ -168,7 +217,7 @@ function CollectionCard({
     lang === "lt"
       ? item.titleLt
       : lang === "ru"
-        ? WASTE_TYPES.find((type) => type.id === item.wasteType)?.nameRu
+        ? (WASTE_TYPES.find((type) => type.id === item.wasteType)?.nameRu ?? item.title)
         : item.title;
   const frequency = lang === "lt" ? item.frequencyLt : item.frequency;
 
@@ -185,6 +234,16 @@ function CollectionCard({
               <span className="font-medium text-muted"> · {longDate(next.date, lang)}</span>
             </p>
           ) : null}
+          {item.sourceUrl && (
+            <a
+              href={item.sourceUrl}
+              target="_blank"
+              rel="noreferrer"
+              className="mt-1 block text-xs text-primary underline"
+            >
+              Ecoservice · {item.checkedAt?.slice(0, 10)}
+            </a>
+          )}
           {item.containerCount > 1 ? (
             <p className="mt-1 text-xs text-faint">
               {t(lang, "containers", { n: item.containerCount })}

@@ -1,29 +1,23 @@
-# API verification — 10 October 2026
+# Schedule API verification — 10 October 2026
 
-## Verified live
+## Automatic source now connected
 
-- The application's BIIP adapter returned all 60 Lithuanian municipalities.
-- Its settlement lookup succeeded for every municipality: 60/60, with nonempty lists and pagination exercised.
-- Street and house-number requests were tested for Alytus, Kaunas, Kaunas district, Klaipėda, Panevėžys, Šiauliai and Vilnius. A street without registered house numbers can legitimately return an empty list; manual house entry remains available.
-- An additional full municipality → eldership → settlement → street → house lookup succeeded in Akademija, Kaunas district.
-- All 16 city schedule pages linked from Ecoservice's public 2026 directory returned HTTP 200 and published document links.
+Ecoservice publishes an unauthenticated Power BI collection report linked from its official schedule page. The new server adapter reads report metadata, filters by the published municipality and street, requires an exact house/settlement match, and reads upcoming dates for the matching container numbers. It rejects truncated results and does not infer waste types from container numbers. Neutral collection icons identify schedules whose waste type is not supplied.
 
-## Automatic collection schedules are not verified or restored
+The live report listed 20 municipality labels: Biržai, Kalvarija, Kazlų Rūda, Klaipėda, Lazdijai, Marijampolė, Mažeikiai, Neringa, Plungė, Radviliškis, Šakiai, Šalčininkai, Šiauliai, Šilutė, Širvintos, Tauragė, Trakai, Varėna, Vilkaviškis and Vilnius city. These are operator report regions, not a claim that every address or every operator in those municipalities is covered. Vilnius district is deliberately excluded from the city mapping.
 
-- Švara's public frontend now uses `/api/session` and Cloudflare Turnstile. A direct server-function request from this environment returned HTTP 403. The previous generic `apiPath` adapter cannot establish that browser verification session.
-- The adapter now reports access rejection immediately and bounds each API request to 12 seconds rather than repeatedly trying function IDs after an access rejection.
-- There is no single collection API for all Lithuanian municipalities. BIIP returns addresses, not pickup dates. Ecoservice's public directory and embedded report are schedule sources, not an implemented automatic API integration in this app.
-- Opening a provider page successfully does not verify a collection date for a particular household.
+A live execution of the actual TypeScript adapter for Alksnynės g. 2, Neringa returned 214 provider-published future dates, beginning 2026-10-12. The report metadata and query endpoint returned HTTP 200. The adapter fetches the current dataset ID rather than keeping a deployment-specific model ID in the code.
 
-## Application changes
+Adding an address and opening a saved address initiate automatic lookup from Home. Failure keeps saved/imported dates. Manual entry and recurring ICS/TXT import remain in a collapsed backup section. Exact address matches are required; apartment schedules are not silently substituted with a building schedule.
 
-- Settings chooses official source links by municipality instead of directing every municipality to Švara.
-- Ecoservice links explicitly require users to confirm it is their operator. Unknown municipalities retain a general operator lookup; coverage is not claimed for every operator.
-- Imported dates and recurring-calendar imports remain available. No pickup dates are generated from address lookup.
-- TypeScript and the production build passed.
+## Remaining operator limits
 
-## Public sources
+Švara now requires an official browser verification session. The old generic server-function adapter is not compatible. Kaunas city and district show a specific official-verification message and source link rather than repeatedly calling stale IDs. This is NOT a restored Švara integration. Other operators without a connected source retain local official source links and optional backup import. No dates are fabricated.
 
-- https://boundaries.biip.lt/v1
-- https://grafikai.svara.lt/
-- https://ecoservice.lt/grafikai/
+## Address API and checks
+
+The BIIP adapter previously returned all 60 municipalities and nonempty settlement lists for 60/60, with representative street/house lookups. BIIP is an address register, not a collection calendar.
+
+Focused tests cover exact house/settlement matching, municipality aliases, Power BI dictionary/repeat/null decoding, truncated response rejection, neutral waste type, recurring ICS import and export. TypeScript and the local production build passed. Browser visual testing is not claimed.
+
+Sources: https://ecoservice.lt/grafikai/ ; https://grafikai.svara.lt/ ; https://boundaries.biip.lt/v1

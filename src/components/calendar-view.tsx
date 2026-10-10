@@ -106,6 +106,7 @@ export function CalendarView() {
                         className={cn(
                           "size-1 rounded-full",
                           mark.collection.wasteType === "mixed" && "bg-mixed",
+                          mark.collection.wasteType === "unspecified" && "bg-primary",
                           mark.collection.wasteType === "paper" && "bg-paper",
                           mark.collection.wasteType === "glass" && "bg-glass",
                           mark.collection.wasteType === "organic" && "bg-organic",
@@ -170,7 +171,8 @@ function EventList({ rows }: { rows: ReturnType<typeof allUpcoming> }) {
               {lang === "lt"
                 ? row.collection.titleLt
                 : lang === "ru"
-                  ? WASTE_TYPES.find((type) => type.id === row.collection.wasteType)?.nameRu
+                  ? (WASTE_TYPES.find((type) => type.id === row.collection.wasteType)?.nameRu ??
+                    row.collection.title)
                   : row.collection.title}
             </p>
             <p className="text-xs text-muted capitalize">{weekdayLong(row.date, lang)}</p>

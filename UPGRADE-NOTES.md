@@ -6,7 +6,7 @@ New controls reuse existing design tokens and live mainly in collapsible Setting
 ## Available
 
 - Multiple addresses with locally persisted schedules and per-address reminder selection.
-- Explicit collection-date entry and TXT/all-day ICS import, with a source and user confirmation.
+- Automatic Ecoservice lookup from Home, with explicit date entry and recurring all-day ICS/TXT import as backup.
 - ICS export without home addresses; selected collection reminders are included as calendar alarms.
 - English, Lithuanian and Russian interface, date formatting and sorting guide.
 - Searchable sorting guide and downloadable missed-collection report drafts.
@@ -14,12 +14,12 @@ New controls reuse existing design tokens and live mainly in collapsible Setting
 
 ## Important limits
 
-- Direct Švara schedule retrieval is paused. Its current site uses a protected session flow. No protection is bypassed and no collection dates are invented.
+- Automatic Ecoservice schedules are connected for exact addresses in its published report. Švara still requires verification on its official site. No protection is bypassed and no collection dates are invented.
 - Address lookup/GPS remain the existing BIIP implementation; nationwide address coverage does not mean nationwide provider schedule integration.
 - Data is saved on this browser/device, not synced to an account. Clearing browser storage removes it. Export dates before clearing storage.
 - Browser notifications only run when the app is open; calendar alarms depend on the receiving calendar application. Reports are drafts, not sent to an operator.
 - Existing PWA infrastructure is unchanged. An address lookup needs a network connection.
-- Company accounts, an authenticated admin dashboard, production Stripe subscriptions and deployment are not included in this batch. They need approved billing configuration and authorized deployment access.
+- Company billing and an authenticated admin dashboard are not implemented in this repository. The existing original-design app is deployed through the linked Vercel project.
 
 ## Verify
 

@@ -1,6 +1,6 @@
 export type Lang = "en" | "lt" | "ru";
 
-export type WasteTypeId = "mixed" | "paper" | "glass" | "organic";
+export type WasteTypeId = "mixed" | "paper" | "glass" | "organic" | "unspecified";
 
 export type Address = {
   district: string;
@@ -32,6 +32,9 @@ export type Collection = {
   containerCount: number;
   hashedId?: string;
   subscriptionUrl?: string;
+  provider?: "ecoservice";
+  sourceUrl?: string;
+  checkedAt?: string;
   dates: CollectionDate[];
 };
 

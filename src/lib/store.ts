@@ -18,6 +18,8 @@ type SavedSchedule = {
   reminders?: string[];
 };
 type AppState = {
+  lookupStatus:
+    "ready" | "not_found" | "verification_required" | "unsupported" | "unavailable" | null;
   savedSchedules: SavedSchedule[];
   selectSchedule: (key: string) => void;
   removeSchedule: (key: string) => void;
@@ -52,6 +54,7 @@ type PersistSlice = {
 export const useAppStore = create<AppState>()(
   persist(
     (set, get) => ({
+      lookupStatus: null,
       hydrated: false,
       savedSchedules: [],
       selectSchedule: (key) => {
@@ -62,6 +65,7 @@ export const useAppStore = create<AppState>()(
             collections: saved.collections,
             reminders: saved.reminders ?? [],
             refreshing: false,
+            lookupStatus: null,
           });
       },
       removeSchedule: (key) => {
@@ -70,7 +74,7 @@ export const useAppStore = create<AppState>()(
         set({
           savedSchedules,
           ...(state.address && addressKey(state.address) === key
-            ? { address: null, collections: [], reminders: [] }
+            ? { address: null, collections: [], reminders: [], lookupStatus: null }
             : {}),
         });
       },
@@ -96,7 +100,14 @@ export const useAppStore = create<AppState>()(
             : (state.savedSchedules.find((item) => item.key === key)?.reminders ?? [])
         ).filter((id) => collections.some((item) => item.id === id));
         savedSchedules.push({ key, address, collections, reminders });
-        set({ address, collections, savedSchedules, refreshing: false, reminders });
+        set({
+          address,
+          collections,
+          savedSchedules,
+          refreshing: false,
+          reminders,
+          lookupStatus: null,
+        });
       },
       toggleReminder: (id) => {
         const reminders = get().reminders.includes(id)
@@ -110,7 +121,8 @@ export const useAppStore = create<AppState>()(
           ),
         });
       },
-      clearSchedule: () => set({ address: null, collections: [], reminders: [] }),
+      clearSchedule: () =>
+        set({ address: null, collections: [], reminders: [], lookupStatus: null }),
     }),
     {
       name: STORAGE_KEY,

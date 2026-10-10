@@ -15,6 +15,7 @@ import {
 } from "@/lib/svara-fn";
 import { useAppStore, addressKey } from "@/lib/store";
 import type { Address, NamedOption } from "@/lib/types";
+import { refreshSchedule, lookupMessage } from "@/lib/schedule-lookup";
 import { cn } from "@/lib/utils";
 
 type PickerKind = "district" | "subDistrict" | "city" | "street" | "house" | null;
@@ -311,6 +312,8 @@ export function AddressSheet({ open, onClose }: { open: boolean; onClose: () => 
         .getState()
         .savedSchedules.find((item) => item.key === addressKey(payload));
       setSchedule(payload, existing?.collections ?? []);
+      const status = await refreshSchedule(payload);
+      if (status !== "ready") toast.info(lookupMessage(status, lang), { duration: 9000 });
       onClose();
     } catch (error) {
       toast.error(error instanceof Error ? error.message : t(lang, "connectionError"));

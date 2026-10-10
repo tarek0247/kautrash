@@ -63,9 +63,9 @@ export function ScheduleTools({ onAdd }: { onAdd: () => void }) {
       </summary>
       <p className="mt-3 text-sm text-muted">
         {say(
-          "Automatic Švara lookup is paused. Save an address, then import confirmed dates. Saved data stays on this device; this is not a live provider feed.",
-          "Automatinė Švaros paieška sustabdyta. Išsaugokite adresą ir importuokite patvirtintas datas. Duomenys saugomi šiame įrenginyje; tai nėra tiesioginis tiekėjo grafikas.",
-          "Автопоиск Švara приостановлен. Сохраните адрес и импортируйте подтверждённые даты. Данные хранятся на этом устройстве; автоматического обновления нет.",
+          "Search automatically from Home when adding an address. File import below is a backup for operators without a connected source. Saved data stays on this device.",
+          "Pridėdami adresą ieškokite automatiškai pradžios lange. Failo importas yra atsarginis būdas neprijungtiems tiekėjams. Duomenys saugomi šiame įrenginyje.",
+          "Автопоиск доступен на главной при добавлении адреса. Импорт файла ниже — резерв для неподключённых операторов. Данные хранятся на этом устройстве.",
         )}
       </p>
       <button type="button" className={`${button} mt-3`} onClick={onAdd}>
@@ -106,7 +106,14 @@ export function ScheduleTools({ onAdd }: { onAdd: () => void }) {
         ))}
       </ul>
       {state.address && (
-        <>
+        <details className="mt-4">
+          <summary className="cursor-pointer font-semibold text-ink">
+            {say(
+              "Backup file / manual dates",
+              "Atsarginis failas / datos ranka",
+              "Резервный файл / даты вручную",
+            )}
+          </summary>
           <label className="mt-4 block text-sm">
             {say("Waste type", "Atliekų rūšis", "Тип отходов")}
             <select
@@ -206,7 +213,7 @@ export function ScheduleTools({ onAdd }: { onAdd: () => void }) {
           >
             {say("Save dates", "Išsaugoti datas", "Сохранить даты")}
           </button>
-        </>
+        </details>
       )}
       {state.collections.length > 0 && (
         <button
@@ -234,7 +241,7 @@ export function ScheduleTools({ onAdd }: { onAdd: () => void }) {
               {state.lang === "lt"
                 ? item.titleLt
                 : state.lang === "ru"
-                  ? WASTE_TYPES.find((type) => type.id === item.wasteType)?.nameRu
+                  ? (WASTE_TYPES.find((type) => type.id === item.wasteType)?.nameRu ?? item.title)
                   : item.title}{" "}
               ({item.dates.length})
             </span>
@@ -259,19 +266,21 @@ export function ScheduleTools({ onAdd }: { onAdd: () => void }) {
           </li>
         ))}
       </ul>
-      {scheduleSources(state.address?.district ?? "").map((provider) => <a
-        key={provider.url}
-        className="mt-3 block text-sm text-primary underline"
-        href={provider.url}
-        target="_blank"
-        rel="noreferrer"
-      >
-        {say(
-          `Open ${provider.name} schedules${provider.operatorCheck ? " (if your operator)" : ""}`,
-          `Atidaryti ${provider.name} grafikus${provider.operatorCheck ? " (jei tai jūsų vežėjas)" : ""}`,
-          `Открыть расписания ${provider.name}${provider.operatorCheck ? " (если это ваш оператор)" : ""}`,
-        )}
-      </a>)}
+      {scheduleSources(state.address?.district ?? "").map((provider) => (
+        <a
+          key={provider.url}
+          className="mt-3 block text-sm text-primary underline"
+          href={provider.url}
+          target="_blank"
+          rel="noreferrer"
+        >
+          {say(
+            `Open ${provider.name} schedules${provider.operatorCheck ? " (if your operator)" : ""}`,
+            `Atidaryti ${provider.name} grafikus${provider.operatorCheck ? " (jei tai jūsų vežėjas)" : ""}`,
+            `Открыть расписания ${provider.name}${provider.operatorCheck ? " (если это ваш оператор)" : ""}`,
+          )}
+        </a>
+      ))}
     </details>
   );
 }

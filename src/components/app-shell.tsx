@@ -6,6 +6,7 @@ import { AddressSheet } from "@/components/address-sheet";
 import { WasteGuideSheet } from "@/components/waste-guide";
 import { collectionsTomorrow } from "@/lib/dates";
 import { t } from "@/lib/i18n";
+import { refreshSchedule } from "@/lib/schedule-lookup";
 import { useAppStore } from "@/lib/store";
 import type { WasteTypeId } from "@/lib/types";
 import { cn } from "@/lib/utils";
@@ -27,6 +28,7 @@ export function useAppActions() {
 export function AppShell({ children }: { children: ReactNode }) {
   const pathname = useRouterState({ select: (s) => s.location.pathname });
   const lang = useAppStore((s) => s.lang);
+  const address = useAppStore((s) => s.address);
   const hydrated = useAppStore((s) => s.hydrated);
   const notify = useAppStore((s) => s.notify);
   const collections = useAppStore((s) => s.collections);
@@ -52,10 +54,17 @@ export function AppShell({ children }: { children: ReactNode }) {
   }, []);
 
   useEffect(() => {
-    if (!hydrated) return;
-    // Direct Švara integration is paused. Never overwrite saved/imported data.
-    useAppStore.getState().setRefreshing(false);
-  }, [hydrated]);
+    if (!hydrated || !address) return;
+    void refreshSchedule(address);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [
+    hydrated,
+    address?.district,
+    address?.subDistrict,
+    address?.city,
+    address?.street,
+    address?.houseNumber,
+  ]);
 
   useEffect(() => {
     if (!hydrated || !notify || typeof Notification === "undefined") return;
