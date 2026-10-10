@@ -4,6 +4,7 @@ import { useAppStore, addressKey } from "@/lib/store";
 import { calendarFile, downloadText, importDays } from "@/lib/calendar-export";
 import { WASTE_TYPES } from "@/lib/waste";
 import type { WasteTypeId } from "@/lib/types";
+import { scheduleSources } from "@/lib/schedule-sources";
 
 export function ScheduleTools({ onAdd }: { onAdd: () => void }) {
   const state = useAppStore();
@@ -258,18 +259,19 @@ export function ScheduleTools({ onAdd }: { onAdd: () => void }) {
           </li>
         ))}
       </ul>
-      <a
+      {scheduleSources(state.address?.district ?? "").map((provider) => <a
+        key={provider.url}
         className="mt-3 block text-sm text-primary underline"
-        href="https://grafikai.svara.lt/"
+        href={provider.url}
         target="_blank"
         rel="noreferrer"
       >
         {say(
-          "Open official Švara search",
-          "Atidaryti oficialią Švaros paiešką",
-          "Открыть официальный поиск Švara",
+          `Open ${provider.name} schedules${provider.operatorCheck ? " (if your operator)" : ""}`,
+          `Atidaryti ${provider.name} grafikus${provider.operatorCheck ? " (jei tai jūsų vežėjas)" : ""}`,
+          `Открыть расписания ${provider.name}${provider.operatorCheck ? " (если это ваш оператор)" : ""}`,
         )}
-      </a>
+      </a>)}
     </details>
   );
 }
