@@ -28,7 +28,7 @@ export const copy = {
     savedAddress: "Saved address",
     about: "About",
     aboutBody:
-      "Unofficial waste schedule companion. Addresses come from the national register; dates are saved or imported by you. Live Švara access is paused. Data stays on this device; your address is hidden by default.",
+      "Unofficial waste schedule companion. Addresses come from the national register. Exact matches use Ecoservice’s public schedule; other operators may need their official website or backup import. Data stays on this device; your address is hidden by default.",
     addressTitle: "Find a schedule",
     addressBody:
       "Pick the official Lithuanian address step by step, or use your location. Street and house number stay hidden on Home.",
@@ -48,7 +48,7 @@ export const copy = {
     house: "House number",
     housePlaceholder: "e.g. 12",
     findSchedule: "Find my schedule",
-    searching: "Saving…",
+    searching: "Searching…",
     back: "Back",
     search: "Search",
     noOptions: "Nothing matches",
@@ -123,7 +123,7 @@ export const copy = {
     savedAddress: "Išsaugotas adresas",
     about: "Apie",
     aboutBody:
-      "Neoficialus atliekų grafikų pagalbininkas. Adresai iš nacionalinio registro, datas išsaugote arba importuojate patys. Tiesioginė Švaros paieška sustabdyta. Duomenys saugomi tik šiame įrenginyje, adresas pagal nutylėjimą slepiamas.",
+      "Neoficialus atliekų grafikų pagalbininkas. Adresai iš nacionalinio registro. Tiksliems adresams naudojamas viešas Ecoservice grafikas; kitiems tiekėjams gali reikėti oficialios svetainės arba atsarginio importo. Duomenys saugomi tik šiame įrenginyje, adresas pagal nutylėjimą slepiamas.",
     addressTitle: "Rasti grafiką",
     addressBody:
       "Pasirinkite oficialų Lietuvos adresą žingsnis po žingsnio arba naudokite vietą. Gatvė ir namo numeris Pradžioje lieka paslėpti.",
@@ -217,7 +217,7 @@ export const copy = {
     savedAddress: "Сохранённый адрес",
     about: "О приложении",
     aboutBody:
-      "Неофициальный помощник. Адреса из национального реестра, даты добавляются пользователем. Автопоиск Švara приостановлен. Данные хранятся на этом устройстве; адрес скрыт по умолчанию.",
+      "Неофициальный помощник. Адреса из национального реестра. Для точных совпадений используется публичное расписание Ecoservice; другим операторам может требоваться официальный сайт или резервный импорт. Данные хранятся на этом устройстве; адрес скрыт по умолчанию.",
     addressTitle: "Сохранить адрес",
     addressBody:
       "Выберите официальный адрес Литвы или используйте геолокацию. Адрес скрыт на главном экране.",
@@ -237,7 +237,7 @@ export const copy = {
     house: "Номер дома",
     housePlaceholder: "Например, 12",
     findSchedule: "Найти расписание",
-    searching: "Сохранение…",
+    searching: "Поиск…",
     back: "Назад",
     search: "Поиск",
     noOptions: "Совпадений нет",

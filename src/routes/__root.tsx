@@ -12,7 +12,7 @@ export const Route = createRootRoute({
       { charSet: "utf-8" },
       { name: "viewport", content: "width=device-width, initial-scale=1" },
       { title: APP_NAME },
-      { name: "description", content: "Live waste collection schedules from UAB Kauno švara." },
+      { name: "description", content: "Waste schedules from connected public providers, with saved calendars and backup import." },
       { name: "theme-color", content: "#3A5340" },
     ],
     links: [
