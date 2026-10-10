@@ -1,3 +1,4 @@
+import { HouseholdOverview } from "./household-tools";
 import { Link } from "@tanstack/react-router";
 import { refreshSchedule, lookupMessage } from "@/lib/schedule-lookup";
 import { scheduleSources } from "@/lib/schedule-sources";
@@ -126,6 +127,8 @@ export function HomeView({
           </Link>
         </section>
       )}
+
+      <HouseholdOverview />
 
       <h2 className="mt-8 font-display text-xl font-semibold tracking-tight text-ink">
         {t(lang, "collections")}

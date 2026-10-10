@@ -49,7 +49,10 @@ export function refreshSchedule(address: Address): Promise<LookupStatus> {
       // An old response must never select an address the user has switched away from.
       if (!state.address || addressKey(state.address) !== key) return status;
       if (status === "ready") {
-        const imported = state.collections.filter((item) => item.provider !== "ecoservice");
+        const liveIds = new Set(result.collections.map((item) => item.id));
+        const imported = state.collections.filter(
+          (item) => item.provider !== "ecoservice" && !liveIds.has(item.id),
+        );
         state.setSchedule(address, [...imported, ...result.collections]);
       }
       useAppStore.setState({ lookupStatus: status });

@@ -1,6 +1,7 @@
 import { create } from "zustand";
 import { persist } from "zustand/middleware";
-import { STORAGE_KEY } from "./constants";
+import type { HouseholdBackup } from "./household";
+import { STORAGE_KEY } from "./constants.ts";
 import type { Address, Collection, Lang } from "./types";
 
 export function addressKey(address: Address) {
@@ -16,8 +17,13 @@ type SavedSchedule = {
   address: Address;
   collections: Collection[];
   reminders?: string[];
+  label?: string;
 };
 type AppState = {
+  prepared: string[];
+  togglePrepared: (key: string) => void;
+  labelSchedule: (key: string, label: string) => void;
+  restoreBackup: (backup: HouseholdBackup) => number;
   lookupStatus:
     "ready" | "not_found" | "verification_required" | "unsupported" | "unavailable" | null;
   savedSchedules: SavedSchedule[];
@@ -42,6 +48,7 @@ type AppState = {
 };
 
 type PersistSlice = {
+  prepared: string[];
   savedSchedules: SavedSchedule[];
   lang: Lang;
   address: Address | null;
@@ -54,6 +61,32 @@ type PersistSlice = {
 export const useAppStore = create<AppState>()(
   persist(
     (set, get) => ({
+      prepared: [],
+      togglePrepared: (key) =>
+        set((state) => ({
+          prepared: state.prepared.includes(key)
+            ? state.prepared.filter((item) => item !== key)
+            : [...state.prepared.slice(-499), key],
+        })),
+      labelSchedule: (key, label) =>
+        set((state) => ({
+          savedSchedules: state.savedSchedules.map((item) =>
+            item.key === key ? { ...item, label: label.slice(0, 60) } : item,
+          ),
+        })),
+      restoreBackup: (backup) => {
+        const state = get();
+        const existing = new Set(state.savedSchedules.map((item) => item.key));
+        const additions: SavedSchedule[] = [];
+        for (const item of backup.schedules) {
+          const key = addressKey(item.address);
+          if (existing.has(key)) continue;
+          existing.add(key);
+          additions.push({ ...item, key });
+        }
+        set({ savedSchedules: [...state.savedSchedules, ...additions] });
+        return additions.length;
+      },
       lookupStatus: null,
       hydrated: false,
       savedSchedules: [],
@@ -99,7 +132,13 @@ export const useAppStore = create<AppState>()(
             ? state.reminders
             : (state.savedSchedules.find((item) => item.key === key)?.reminders ?? [])
         ).filter((id) => collections.some((item) => item.id === id));
-        savedSchedules.push({ key, address, collections, reminders });
+        savedSchedules.push({
+          key,
+          address,
+          collections,
+          reminders,
+          label: state.savedSchedules.find((item) => item.key === key)?.label,
+        });
         set({
           address,
           collections,
@@ -126,8 +165,9 @@ export const useAppStore = create<AppState>()(
     }),
     {
       name: STORAGE_KEY,
-      version: 4,
+      version: 5,
       partialize: (state): PersistSlice => ({
+        prepared: state.prepared,
         savedSchedules: state.savedSchedules,
         lang: state.lang,
         address: state.address,
@@ -139,6 +179,7 @@ export const useAppStore = create<AppState>()(
       migrate: (persisted): PersistSlice => {
         const state = (persisted ?? {}) as Partial<PersistSlice>;
         return {
+          prepared: state.prepared ?? [],
           savedSchedules:
             state.savedSchedules ??
             (state.address

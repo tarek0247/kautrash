@@ -1,3 +1,4 @@
+import { HouseholdSettings } from "./household-tools";
 import { Bell, EyeOff, Globe, Info, Lock, MapPin } from "lucide-react";
 import { toast } from "sonner";
 import { t } from "@/lib/i18n";
@@ -188,6 +189,7 @@ export function SettingsView({ onChangeAddress }: { onChangeAddress: () => void 
         </li>
       </ul>
       <ScheduleTools key={address ? addressKey(address) : "no-address"} onAdd={onChangeAddress} />
+      <HouseholdSettings />
       <ReportTools />
     </div>
   );
